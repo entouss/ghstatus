@@ -165,7 +165,9 @@ function toDeployment(node, state, repoUrl) {
       sha: firstString(node, SHA_KEYS),
       ref: firstString(node, ["ref", "refName", "branch"]),
       description: firstString(node, ["description"]),
-      siteUrl: firstString(node, ["environmentUrl", "environment_url", "url"]),
+      // Not a bare "url" key — in these payloads that matches almost anything.
+      siteUrl: firstString(node, ["environmentUrl", "environment_url"]),
+      logUrl: firstString(node, ["logUrl", "log_url", "targetUrl", "target_url"]),
     }),
     repoUrl
   );
@@ -264,9 +266,26 @@ function deploymentFromCard(card, state, repoUrl) {
       actorUrl: actor ? `${webBaseOf(repoUrl)}/${actor}` : null,
       sha,
       ref: refFromCard(card),
+      logUrl: logUrlFromCard(card, repoUrl),
     }),
     repoUrl
   );
+}
+
+/**
+ * The target of "View logs" in a row's ... menu — an Actions run or job. It is
+ * a plain anchor in the card, so we can have it without an API call, which is
+ * the only way session mode reaches the run at all.
+ */
+function logUrlFromCard(card, repoUrl) {
+  const link = card.querySelector('a[href*="/actions/runs/"]');
+  return link ? absoluteUrl(link.getAttribute("href"), repoUrl) : null;
+}
+
+function absoluteUrl(href, repoUrl) {
+  if (!href) return null;
+  if (/^https?:\/\//.test(href)) return href;
+  return `${webBaseOf(repoUrl)}${href.startsWith("/") ? "" : "/"}${href}`;
 }
 
 /** Deployment cards link the deployed branch as /owner/repo/tree/<ref>. */

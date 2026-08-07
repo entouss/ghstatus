@@ -120,7 +120,16 @@ export function withLinks(d, repoUrl) {
   // The status URL usually points straight at the Actions run that deployed.
   d.runId = d.runId || runIdFromUrl(d.logUrl);
   d.runUrl = d.runId ? `${repoUrl}/actions/runs/${d.runId}` : null;
+  // When it names a specific job — which is what GitHub's own "View logs"
+  // links to — that is already the answer, no lookup needed.
+  d.jobUrl = d.jobUrl || (isJobUrl(d.logUrl) ? d.logUrl : null);
   return d;
+}
+
+const JOB_URL = /\/actions\/runs\/\d+\/job\/\d+/;
+
+export function isJobUrl(url) {
+  return JOB_URL.test(String(url || ""));
 }
 
 /** GitHub deployment refs are branches, tags or raw commits. */

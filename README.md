@@ -132,9 +132,14 @@ Seeing *"Open the deployed commit"* on every row means no runs were matched at
 all, which is expected when the deployments come from something other than
 GitHub Actions.
 
-**This section needs a token.** There is no dependable way to read a run's jobs
-out of the rendered page, so in session-only mode the jobs list is replaced by
-a direct link to the run whenever the deployment tells us where it is.
+**The jobs list needs a token** — there is no dependable way to read a run's
+jobs out of the rendered page. The *links* do not: GitHub's own **View logs**
+(in each deployment's `...` menu) is a plain anchor on the page, so session mode
+scrapes it and every row still reaches its run or job. In session-only mode the
+jobs list is replaced by a link to the run.
+
+If a status names a specific job — which `View logs` usually does — that is used
+as-is, with no lookup at all.
 
 Almost everything on screen is a link back to where it came from:
 

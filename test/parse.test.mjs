@@ -257,6 +257,43 @@ test("a deployment carries the run its status points at", () => {
   assert.equal(d.environment, "production");
 });
 
+test("a status naming a specific job is the job link, with no lookup", () => {
+  // This is what GitHub's own "View logs" points at.
+  const d = describeDeployment(REPO_URL, DEPLOYMENT, {
+    state: "success",
+    log_url: "https://github.com/my-org/api/actions/runs/4821/job/99",
+  });
+  assert.equal(d.jobUrl, "https://github.com/my-org/api/actions/runs/4821/job/99");
+  assert.equal(d.runUrl, `${REPO_URL}/actions/runs/4821`);
+});
+
+test("a status naming only the run leaves the job to be resolved", () => {
+  const d = describeDeployment(REPO_URL, DEPLOYMENT, {
+    state: "success",
+    log_url: "https://github.com/my-org/api/actions/runs/4821",
+  });
+  assert.equal(d.jobUrl, null);
+  assert.equal(d.runUrl, `${REPO_URL}/actions/runs/4821`);
+});
+
+test("a scraped deployment picks up the run link from the page", () => {
+  const [env] = collectEnvironments(
+    {
+      environments: [
+        {
+          name: "production",
+          state: "success",
+          sha: "abc1234def",
+          logUrl: "https://github.com/my-org/api/actions/runs/4821/job/99",
+        },
+      ],
+    },
+    REPO_URL
+  );
+  assert.equal(env.latest.jobUrl, "https://github.com/my-org/api/actions/runs/4821/job/99");
+  assert.equal(env.latest.runId, "4821");
+});
+
 test("a deployment whose status points elsewhere has no run", () => {
   const d = describeDeployment(REPO_URL, DEPLOYMENT, {
     state: "success",
