@@ -202,14 +202,15 @@ function renderFacts(d) {
   addFact(dl, "Commit", d.sha ? link(d.shaUrl, shortSha(d.sha), "mono") : null);
   addFact(dl, "Ref", d.ref ? el("span", { class: "mono" }, d.ref) : null);
   addFact(dl, "Version", d.version ? el("span", { class: "mono" }, d.version) : null);
-  addFact(dl, "Image", d.image ? el("span", { class: "mono wrap" }, d.image) : null);
-  addFact(dl, "Description", d.description || null);
+  // These three run long, so they take a row to themselves.
+  addFact(dl, "Image", d.image ? el("span", { class: "mono wrap" }, d.image) : null, true);
+  addFact(dl, "Description", d.description || null, true);
 
   const links = [];
   if (d.logUrl) links.push(link(d.logUrl, "View logs"));
   if (d.siteUrl) links.push(link(d.siteUrl, "Open environment"));
   if (links.length) {
-    addFact(dl, "Links", el("span", { class: "links" }, ...interleave(links, " · ")));
+    addFact(dl, "Links", el("span", { class: "links" }, ...interleave(links, " · ")), true);
   }
   return dl;
 }
@@ -220,9 +221,10 @@ function statusValue(d) {
   return span;
 }
 
-function addFact(dl, label, value) {
+function addFact(dl, label, value, wide = false) {
   if (value === null || value === undefined || value === "") return;
-  dl.append(el("dt", {}, label), el("dd", {}, value));
+  const cls = wide ? { class: "wide" } : {};
+  dl.append(el("dt", cls, label), el("dd", cls, value));
 }
 
 // --- history ---------------------------------------------------------------
