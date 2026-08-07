@@ -23,9 +23,9 @@ history:
           Image         ghcr.io/my-org/api:2.4.0-rc1
           Links         View logs · Open environment
 
-          PAST DEPLOYMENTS                              ↗
-          🟩 9f2e10c  v2.3.1      2d ago · @alice
-          🟩 41ab7c3  v2.3.0      6d ago · @alice
+          PAST DEPLOYMENTS ↗
+          🟩 v2.3.1                 9f2e10c    2d ago · @alice
+          🟩 v2.3.0                 41ab7c3    6d ago · @alice
     › ⬜ preview                       no deployments
 ```
 

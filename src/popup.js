@@ -266,11 +266,13 @@ function renderHistory(deployments, result, envName) {
   const list = el("ul", { class: "history-list" });
   for (const d of past) {
     const item = el("li", { class: "row history-row", title: stateTooltip(d) });
+    // The subtitle deliberately excludes the sha here — it has its own column.
+    const label = d.version || d.image || d.ref || stateLabel(d.state);
     item.append(
       el("span", { class: "dot" }, EMOJI[d.bucket]),
-      d.sha ? link(d.shaUrl, shortSha(d.sha), "mono") : el("span", { class: "mono" }, "—"),
-      el("span", { class: "tag" }, deploymentSubtitle(d) || stateLabel(d.state)),
+      el("span", { class: "tag" }, label),
       el("span", { class: "grow" }),
+      d.sha ? link(d.shaUrl, shortSha(d.sha), "sha mono") : el("span", { class: "sha mono" }, "—"),
       el("span", { class: "meta" }, envMeta(d))
     );
     list.append(item);
