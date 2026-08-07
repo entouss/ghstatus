@@ -18,8 +18,12 @@ import { shortSha } from "./util.js";
  * @property {string|null} sha
  * @property {string|null} shaUrl
  * @property {string|null} ref
+ * @property {"branch"|"tag"|"commit"|null} refKind what that ref actually is
+ * @property {string|null} refUrl
  * @property {string|null} version
+ * @property {string|null} versionUrl
  * @property {string|null} image
+ * @property {string|null} imageUrl
  * @property {string|null} description
  * @property {string|null} logUrl      build/run log for this deployment
  * @property {string|null} siteUrl     the deployed environment itself
@@ -38,8 +42,12 @@ export function emptyDeployment(overrides = {}) {
     sha: null,
     shaUrl: null,
     ref: null,
+    refKind: null,
+    refUrl: null,
     version: null,
+    versionUrl: null,
     image: null,
+    imageUrl: null,
     description: null,
     logUrl: null,
     siteUrl: null,
@@ -58,24 +66,91 @@ export function describeDeployment(repoUrl, deployment, status) {
   const state = status?.state || "in_progress";
   const payload = readPayload(deployment.payload);
 
-  return emptyDeployment({
-    id: deployment.id,
-    state,
-    bucket: bucketOf(state),
-    inferredState,
-    updatedAt: status?.updated_at || status?.created_at || deployment.updated_at || deployment.created_at,
-    createdAt: deployment.created_at,
-    actor: deployment.creator?.login || null,
-    actorUrl: deployment.creator?.html_url || null,
-    sha: deployment.sha || null,
-    shaUrl: deployment.sha ? `${repoUrl}/commit/${deployment.sha}` : null,
-    ref: deployment.ref || null,
-    version: payload.version || versionFromRef(deployment.ref),
-    image: payload.image,
-    description: deployment.description || status?.description || null,
-    logUrl: status?.log_url || status?.target_url || null,
-    siteUrl: status?.environment_url || null,
-  });
+  return withLinks(
+    emptyDeployment({
+      id: deployment.id,
+      state,
+      bucket: bucketOf(state),
+      inferredState,
+      updatedAt: status?.updated_at || status?.created_at || deployment.updated_at || deployment.created_at,
+      createdAt: deployment.created_at,
+      actor: deployment.creator?.login || null,
+      actorUrl: deployment.creator?.html_url || null,
+      sha: deployment.sha || null,
+      ref: deployment.ref || null,
+      version: payload.version || versionFromRef(deployment.ref),
+      image: payload.image,
+      description: deployment.description || status?.description || null,
+      logUrl: status?.log_url || status?.target_url || null,
+      siteUrl: status?.environment_url || null,
+    }),
+    repoUrl
+  );
+}
+
+/**
+ * Point every field we can at the page it came from. Both auth paths run this,
+ * so a scraped deployment links out exactly like an API one.
+ */
+export function withLinks(d, repoUrl) {
+  if (!repoUrl) return d;
+  const kind = refKind(d.ref);
+
+  d.shaUrl = d.sha ? `${repoUrl}/commit/${d.sha}` : null;
+  d.refKind = kind;
+  d.refUrl = d.ref ? `${repoUrl}/tree/${encodePath(d.ref)}` : null;
+  // Only a version that *is* the deployed tag has a release page to point at;
+  // a version read out of the payload is just a string we were handed.
+  d.versionUrl =
+    d.version && d.version === d.ref && kind === "tag"
+      ? `${repoUrl}/releases/tag/${encodePath(d.version)}`
+      : null;
+  d.imageUrl = imageUrl(repoUrl, d.image);
+  return d;
+}
+
+/** GitHub deployment refs are branches, tags or raw commits. */
+export function refKind(ref) {
+  if (!ref) return null;
+  if (/^[0-9a-f]{40}$/i.test(ref)) return "commit";
+  return /^v?\d+[\w.+-]*$/.test(ref) ? "tag" : "branch";
+}
+
+/** Branch names contain slashes that must survive as path separators. */
+function encodePath(ref) {
+  return String(ref).split("/").map(encodeURIComponent).join("/");
+}
+
+/**
+ * Registry references we can turn into a browsable page. Deliberately narrow:
+ * a wrong link is worse than none, so this only handles the two conventions
+ * whose web URL is unambiguous.
+ */
+export function imageUrl(repoUrl, image) {
+  if (!image || !repoUrl) return null;
+
+  const path = String(image).split("@")[0].replace(/:[^:/]+$/, "");
+  const parts = path.split("/").filter(Boolean);
+  const owner = repoUrl.split("/").slice(-2)[0];
+
+  // ghcr.io/<owner>/<name> — the package page lives under the repo, which
+  // holds when the image was published from it (the usual setup).
+  if (parts[0] === "ghcr.io" && parts.length === 3) {
+    return parts[1].toLowerCase() === String(owner).toLowerCase()
+      ? `${repoUrl}/pkgs/container/${encodeURIComponent(parts[2])}`
+      : null;
+  }
+
+  // docker.io/<ns>/<name>, or the bare <ns>/<name> that implies Docker Hub.
+  const hub =
+    (parts[0] === "docker.io" && parts.length === 3) ||
+    (parts.length === 2 && !parts[0].includes("."));
+  if (hub) {
+    const [ns, name] = parts.slice(-2);
+    return `https://hub.docker.com/r/${encodeURIComponent(ns)}/${encodeURIComponent(name)}`;
+  }
+
+  return null;
 }
 
 const IMAGE_KEYS = ["image", "image_tag", "imageTag", "docker_image", "dockerImage", "container_image", "artifact"];
@@ -126,13 +201,17 @@ function versionFromRef(ref) {
   return /^v?\d+[\w.+-]*$/.test(ref) ? ref : null;
 }
 
-/** One-line summary of what shipped, for the collapsed row. */
-export function deploymentSubtitle(deployment) {
-  return (
+/**
+ * One-line summary of what shipped, for the left of a collapsed row. The
+ * branch and commit have columns of their own, so whatever is already shown
+ * there is not repeated here.
+ * @param {{hasShaColumn?: boolean}} columns which columns the row already has
+ */
+export function deploymentSubtitle(deployment, { hasShaColumn = false } = {}) {
+  const label =
     deployment.version ||
     deployment.image ||
-    shortSha(deployment.sha) ||
-    deployment.ref ||
-    null
-  );
+    (hasShaColumn ? null : shortSha(deployment.sha)) ||
+    null;
+  return label && label !== deployment.ref ? label : null;
 }

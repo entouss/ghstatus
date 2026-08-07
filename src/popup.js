@@ -162,7 +162,9 @@ function renderEnv(result, env) {
     el("span", { class: "env-name" }, env.name),
     subtitle ? el("span", { class: "tag" }, subtitle) : "",
     el("span", { class: "grow" }),
-    el("span", { class: "meta" }, envMeta(latest))
+    branchCell(latest),
+    el("span", { class: "meta" }, envMeta(latest)),
+    openLink(activityUrl(result, env.name), "Open activity log")
   );
   box.append(summary);
 
@@ -198,12 +200,12 @@ function renderFacts(d) {
 
   addFact(dl, "Status", statusValue(d));
   addFact(dl, "Updated", d.updatedAt ? absolute(d.updatedAt) : null);
-  addFact(dl, "Triggered by", d.actor ? link(d.actorUrl, `@${d.actor}`) : null);
-  addFact(dl, "Commit", d.sha ? link(d.shaUrl, shortSha(d.sha), "mono") : null);
-  addFact(dl, "Ref", d.ref ? el("span", { class: "mono" }, d.ref) : null);
-  addFact(dl, "Version", d.version ? el("span", { class: "mono" }, d.version) : null);
+  addFact(dl, "Triggered by", d.actor ? maybeLink(d.actorUrl, `@${d.actor}`) : null);
+  addFact(dl, "Commit", d.sha ? maybeLink(d.shaUrl, shortSha(d.sha), "mono") : null);
+  addFact(dl, refLabel(d), d.ref ? maybeLink(d.refUrl, d.ref, "mono") : null);
+  addFact(dl, "Version", d.version ? maybeLink(d.versionUrl, d.version, "mono") : null);
   // These three run long, so they take a row to themselves.
-  addFact(dl, "Image", d.image ? el("span", { class: "mono wrap" }, d.image) : null, true);
+  addFact(dl, "Image", d.image ? maybeLink(d.imageUrl, d.image, "mono wrap") : null, true);
   addFact(dl, "Description", d.description || null, true);
 
   const links = [];
@@ -215,8 +217,14 @@ function renderFacts(d) {
   return dl;
 }
 
+/** Name the ref for what it is, so "main" and "v2.3.1" aren't both "Ref". */
+function refLabel(d) {
+  return { tag: "Tag", commit: "Ref commit" }[d.refKind] || "Branch";
+}
+
 function statusValue(d) {
-  const span = el("span", {}, `${EMOJI[d.bucket]} ${stateLabel(d.state)}`);
+  // The state links to the run that produced it, when there is one.
+  const span = el("span", {}, `${EMOJI[d.bucket]} `, maybeLink(d.logUrl, stateLabel(d.state)));
   if (d.inferredState) span.append(el("span", { class: "hint" }, " (no status reported)"));
   return span;
 }
@@ -266,12 +274,12 @@ function renderHistory(deployments, result, envName) {
   const list = el("ul", { class: "history-list" });
   for (const d of past) {
     const item = el("li", { class: "row history-row", title: stateTooltip(d) });
-    // The subtitle deliberately excludes the sha here — it has its own column.
-    const label = d.version || d.image || d.ref || stateLabel(d.state);
+    const label = deploymentSubtitle(d, { hasShaColumn: true }) || stateLabel(d.state);
     item.append(
       el("span", { class: "dot" }, EMOJI[d.bucket]),
       el("span", { class: "tag" }, label),
       el("span", { class: "grow" }),
+      branchCell(d),
       d.sha ? link(d.shaUrl, shortSha(d.sha), "sha mono") : el("span", { class: "sha mono" }, "—"),
       el("span", { class: "meta" }, envMeta(d))
     );
@@ -302,9 +310,25 @@ function chevron() {
   return el("span", { class: "chev", "aria-hidden": "true" }, "›");
 }
 
+/** Rendered even when empty, so the column stays put down the list. */
+function branchCell(d) {
+  const cell = el("span", { class: "branch" });
+  if (d?.ref) {
+    cell.title = `${refLabel(d)}: ${d.ref}`;
+    cell.append(maybeLink(d.refUrl, d.ref, "mono"));
+  }
+  return cell;
+}
+
 function absolute(value) {
   const node = el("span", { title: new Date(value).toLocaleString() }, timeAgo(value));
   return node;
+}
+
+/** Link the value when we know where it points, plain text when we don't. */
+function maybeLink(href, text, className = "") {
+  if (!href) return className ? el("span", { class: className }, text) : text;
+  return link(href, text, className);
 }
 
 function link(href, text, className = "") {

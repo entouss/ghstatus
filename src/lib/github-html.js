@@ -9,7 +9,7 @@
 //   2. the rendered DOM, anchored on the most stable links on the page.
 
 import { deploymentsUrl, webBase } from "./config.js";
-import { emptyDeployment } from "./deployment.js";
+import { emptyDeployment, withLinks } from "./deployment.js";
 import { bucketOf, stateFromText } from "./state.js";
 
 export class NotAuthenticatedError extends Error {}
@@ -150,24 +150,25 @@ export function collectDeployments(root, repoUrl = "") {
 }
 
 function toDeployment(node, state, repoUrl) {
-  const sha = firstString(node, SHA_KEYS);
   const actor = extractActor(node);
   const when = firstString(node, TIME_KEYS);
 
-  return emptyDeployment({
-    id: node.id ?? null,
-    state,
-    bucket: bucketOf(state),
-    updatedAt: when,
-    createdAt: firstString(node, ["createdAt", "created_at"]) || when,
-    actor,
-    actorUrl: actor ? `${repoUrl.replace(/\/[^/]+\/[^/]+$/, "")}/${actor}` : null,
-    sha,
-    shaUrl: sha && repoUrl ? `${repoUrl}/commit/${sha}` : null,
-    ref: firstString(node, ["ref", "refName", "branch"]),
-    description: firstString(node, ["description"]),
-    siteUrl: firstString(node, ["environmentUrl", "environment_url", "url"]),
-  });
+  return withLinks(
+    emptyDeployment({
+      id: node.id ?? null,
+      state,
+      bucket: bucketOf(state),
+      updatedAt: when,
+      createdAt: firstString(node, ["createdAt", "created_at"]) || when,
+      actor,
+      actorUrl: actor ? `${webBaseOf(repoUrl)}/${actor}` : null,
+      sha: firstString(node, SHA_KEYS),
+      ref: firstString(node, ["ref", "refName", "branch"]),
+      description: firstString(node, ["description"]),
+      siteUrl: firstString(node, ["environmentUrl", "environment_url", "url"]),
+    }),
+    repoUrl
+  );
 }
 
 function firstString(obj, keys) {
@@ -251,17 +252,30 @@ function deploymentFromCard(card, state, repoUrl) {
     ? (commit.getAttribute("href").match(/\/commit\/([0-9a-f]{7,40})/) || [])[1]
     : null;
   const actor = actorFromCard(card);
+  const when = time?.getAttribute("datetime") || null;
 
-  return emptyDeployment({
-    state,
-    bucket: bucketOf(state),
-    updatedAt: time?.getAttribute("datetime") || null,
-    createdAt: time?.getAttribute("datetime") || null,
-    actor,
-    actorUrl: actor ? `${webBaseOf(repoUrl)}/${actor}` : null,
-    sha,
-    shaUrl: sha && repoUrl ? `${repoUrl}/commit/${sha}` : null,
-  });
+  return withLinks(
+    emptyDeployment({
+      state,
+      bucket: bucketOf(state),
+      updatedAt: when,
+      createdAt: when,
+      actor,
+      actorUrl: actor ? `${webBaseOf(repoUrl)}/${actor}` : null,
+      sha,
+      ref: refFromCard(card),
+    }),
+    repoUrl
+  );
+}
+
+/** Deployment cards link the deployed branch as /owner/repo/tree/<ref>. */
+function refFromCard(card) {
+  for (const link of card.querySelectorAll('a[href*="/tree/"]')) {
+    const m = link.getAttribute("href").match(/\/tree\/(.+)$/);
+    if (m) return decodeURIComponent(m[1]);
+  }
+  return null;
 }
 
 /** A profile link is a bare "/login" href — anything deeper is a repo path. */

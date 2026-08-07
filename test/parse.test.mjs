@@ -7,7 +7,13 @@ import assert from "node:assert/strict";
 
 import { bucketOf, stateFromText, stateLabel, mostSevere } from "../src/lib/state.js";
 import { collectEnvironments, collectDeployments } from "../src/lib/github-html.js";
-import { describeDeployment, readPayload, deploymentSubtitle } from "../src/lib/deployment.js";
+import {
+  describeDeployment,
+  readPayload,
+  deploymentSubtitle,
+  refKind,
+  imageUrl,
+} from "../src/lib/deployment.js";
 import { parseRepo } from "../src/lib/config.js";
 import { mapLimit, timeAgo, shortSha } from "../src/lib/util.js";
 
@@ -133,8 +139,91 @@ test("deploymentSubtitle prefers the most specific identifier", () => {
   assert.equal(deploymentSubtitle({ version: "1.2", image: "a:1", sha: "abcdef1234" }), "1.2");
   assert.equal(deploymentSubtitle({ version: null, image: "a:1", sha: "abcdef1234" }), "a:1");
   assert.equal(deploymentSubtitle({ version: null, image: null, sha: "abcdef1234" }), "abcdef1");
-  assert.equal(deploymentSubtitle({ version: null, image: null, sha: null, ref: "main" }), "main");
   assert.equal(deploymentSubtitle({}), null);
+});
+
+test("deploymentSubtitle does not repeat what another column shows", () => {
+  // A tag deploy has version === ref, and the branch column already shows it.
+  assert.equal(deploymentSubtitle({ version: "v2.3.1", ref: "v2.3.1" }), null);
+  // History rows carry their own sha column, so the sha is not a fallback there.
+  assert.equal(
+    deploymentSubtitle({ sha: "abcdef1234" }, { hasShaColumn: true }),
+    null
+  );
+  assert.equal(
+    deploymentSubtitle({ version: "1.2", sha: "abcdef1234" }, { hasShaColumn: true }),
+    "1.2"
+  );
+});
+
+// --- outbound links --------------------------------------------------------
+
+test("refKind tells branches, tags and raw commits apart", () => {
+  assert.equal(refKind("main"), "branch");
+  assert.equal(refKind("feature/login"), "branch");
+  assert.equal(refKind("v2.3.1"), "tag");
+  assert.equal(refKind("2.3.1"), "tag");
+  assert.equal(refKind("9f2e10c4b8d7a1e6f3c2b5a8d9e7f1c4b6a3d8e2"), "commit");
+  assert.equal(refKind(null), null);
+});
+
+test("a branch links to its tree, slashes intact", () => {
+  const d = describeDeployment(REPO_URL, { ...DEPLOYMENT, ref: "feature/login" }, { state: "success" });
+  assert.equal(d.refKind, "branch");
+  assert.equal(d.refUrl, `${REPO_URL}/tree/feature/login`);
+  // A slash is a path separator here, not a character to escape.
+  assert.ok(!d.refUrl.includes("%2F"));
+});
+
+test("a branch with a character needing escaping is still safe", () => {
+  const d = describeDeployment(REPO_URL, { ...DEPLOYMENT, ref: "fix/a b" }, { state: "success" });
+  assert.equal(d.refUrl, `${REPO_URL}/tree/fix/a%20b`);
+});
+
+test("only a version that is the deployed tag gets a release link", () => {
+  const tagged = describeDeployment(
+    REPO_URL,
+    { ...DEPLOYMENT, ref: "v2.3.1", payload: null },
+    { state: "success" }
+  );
+  assert.equal(tagged.versionUrl, `${REPO_URL}/releases/tag/v2.3.1`);
+
+  // A version read out of the payload names no release we can point at.
+  const fromPayload = describeDeployment(
+    REPO_URL,
+    { ...DEPLOYMENT, ref: "main", payload: { version: "2.3.1" } },
+    { state: "success" }
+  );
+  assert.equal(fromPayload.version, "2.3.1");
+  assert.equal(fromPayload.versionUrl, null);
+});
+
+test("imageUrl only links registries whose web URL is unambiguous", () => {
+  assert.equal(
+    imageUrl(REPO_URL, "ghcr.io/my-org/api:2.3.1"),
+    `${REPO_URL}/pkgs/container/api`
+  );
+  assert.equal(imageUrl(REPO_URL, "ghcr.io/my-org/api@sha256:abc123"), `${REPO_URL}/pkgs/container/api`);
+  // A different owner's package does not live under this repo.
+  assert.equal(imageUrl(REPO_URL, "ghcr.io/other-org/api:1.0"), null);
+  // Nested ghcr paths are ambiguous, so we decline rather than guess.
+  assert.equal(imageUrl(REPO_URL, "ghcr.io/my-org/team/api:1.0"), null);
+
+  assert.equal(imageUrl(REPO_URL, "my-ns/api:1.0"), "https://hub.docker.com/r/my-ns/api");
+  assert.equal(imageUrl(REPO_URL, "docker.io/my-ns/api:1.0"), "https://hub.docker.com/r/my-ns/api");
+
+  assert.equal(imageUrl(REPO_URL, "registry.example.com/my-ns/api:1.0"), null);
+  assert.equal(imageUrl(REPO_URL, null), null);
+});
+
+test("scraped deployments get the same links as API ones", () => {
+  const [env] = collectEnvironments(
+    { environments: [{ name: "production", state: "success", sha: "abc1234def", ref: "main" }] },
+    REPO_URL
+  );
+  assert.equal(env.latest.refUrl, `${REPO_URL}/tree/main`);
+  assert.equal(env.latest.refKind, "branch");
+  assert.equal(env.latest.shaUrl, `${REPO_URL}/commit/abc1234def`);
 });
 
 // --- embedded JSON walks ---------------------------------------------------
