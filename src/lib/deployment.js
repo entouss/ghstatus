@@ -2,6 +2,7 @@
 // deployment came from. Fields are best-effort: the REST path fills all of
 // them, the page-scraping path fills what the markup happens to expose.
 
+import { runIdFromUrl } from "./github-actions.js";
 import { bucketOf } from "./state.js";
 import { shortSha } from "./util.js";
 
@@ -27,6 +28,9 @@ import { shortSha } from "./util.js";
  * @property {string|null} description
  * @property {string|null} logUrl      build/run log for this deployment
  * @property {string|null} siteUrl     the deployed environment itself
+ * @property {string|null} environment name of the environment deployed to
+ * @property {string|null} runId       Actions run that performed it, if known
+ * @property {string|null} runUrl
  */
 
 export function emptyDeployment(overrides = {}) {
@@ -51,6 +55,9 @@ export function emptyDeployment(overrides = {}) {
     description: null,
     logUrl: null,
     siteUrl: null,
+    environment: null,
+    runId: null,
+    runUrl: null,
     ...overrides,
   };
 }
@@ -83,6 +90,7 @@ export function describeDeployment(repoUrl, deployment, status) {
       description: deployment.description || status?.description || null,
       logUrl: status?.log_url || status?.target_url || null,
       siteUrl: status?.environment_url || null,
+      environment: deployment.environment || null,
     }),
     repoUrl
   );
@@ -106,6 +114,10 @@ export function withLinks(d, repoUrl) {
       ? `${repoUrl}/releases/tag/${encodePath(d.version)}`
       : null;
   d.imageUrl = imageUrl(repoUrl, d.image);
+
+  // The status URL usually points straight at the Actions run that deployed.
+  d.runId = d.runId || runIdFromUrl(d.logUrl);
+  d.runUrl = d.runId ? `${repoUrl}/actions/runs/${d.runId}` : null;
   return d;
 }
 

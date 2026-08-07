@@ -15,7 +15,8 @@ import {
   imageUrl,
 } from "../src/lib/deployment.js";
 import { parseRepo } from "../src/lib/config.js";
-import { mapLimit, timeAgo, shortSha } from "../src/lib/util.js";
+import { mapLimit, timeAgo, duration, shortSha } from "../src/lib/util.js";
+import { runIdFromUrl, jobBucket, describeJob } from "../src/lib/github-actions.js";
 
 const REPO_URL = "https://github.com/my-org/api";
 
@@ -226,6 +227,68 @@ test("scraped deployments get the same links as API ones", () => {
   assert.equal(env.latest.shaUrl, `${REPO_URL}/commit/abc1234def`);
 });
 
+// --- Actions runs and jobs -------------------------------------------------
+
+test("runIdFromUrl finds the run in the URLs GitHub actually sets", () => {
+  assert.equal(runIdFromUrl("https://github.com/my-org/api/actions/runs/4821"), "4821");
+  // log_url often points at a specific job within the run.
+  assert.equal(
+    runIdFromUrl("https://github.com/my-org/api/actions/runs/4821/job/99"),
+    "4821"
+  );
+  assert.equal(runIdFromUrl("https://github.com/my-org/api/actions/runs/4821?check_suite=1"), "4821");
+  // Some tooling puts the deployed site here instead — that is not a run.
+  assert.equal(runIdFromUrl("https://api.example.com"), null);
+  assert.equal(runIdFromUrl(null), null);
+});
+
+test("a deployment carries the run its status points at", () => {
+  const d = describeDeployment(REPO_URL, DEPLOYMENT, {
+    state: "success",
+    log_url: "https://github.com/my-org/api/actions/runs/4821",
+  });
+  assert.equal(d.runId, "4821");
+  assert.equal(d.runUrl, `${REPO_URL}/actions/runs/4821`);
+  assert.equal(d.environment, "production");
+});
+
+test("a deployment whose status points elsewhere has no run", () => {
+  const d = describeDeployment(REPO_URL, DEPLOYMENT, {
+    state: "success",
+    target_url: "https://api.example.com",
+  });
+  assert.equal(d.runId, null);
+  assert.equal(d.runUrl, null);
+});
+
+test("jobBucket treats an unfinished job as running", () => {
+  assert.equal(jobBucket({ status: "in_progress", conclusion: null }), "busy");
+  assert.equal(jobBucket({ status: "queued", conclusion: null }), "busy");
+  assert.equal(jobBucket({ status: "completed", conclusion: "success" }), "ok");
+  assert.equal(jobBucket({ status: "completed", conclusion: "failure" }), "bad");
+  assert.equal(jobBucket({ status: "completed", conclusion: "timed_out" }), "bad");
+  assert.equal(jobBucket({ status: "completed", conclusion: "cancelled" }), "idle");
+  assert.equal(jobBucket({ status: "completed", conclusion: "skipped" }), "idle");
+  // action_required means a human has to step in, so it reads as in flight.
+  assert.equal(jobBucket({ status: "completed", conclusion: "action_required" }), "busy");
+  assert.equal(jobBucket({ status: "completed", conclusion: "something_new" }), "idle");
+});
+
+test("describeJob normalises the fields the row needs", () => {
+  const job = describeJob({
+    id: 99,
+    name: "deploy (production)",
+    status: "completed",
+    conclusion: "success",
+    started_at: "2026-08-05T09:00:00Z",
+    completed_at: "2026-08-05T09:03:20Z",
+    html_url: "https://github.com/my-org/api/actions/runs/4821/job/99",
+  });
+  assert.equal(job.name, "deploy (production)");
+  assert.equal(job.bucket, "ok");
+  assert.equal(duration(job.startedAt, job.completedAt), "3m 20s");
+});
+
 // --- embedded JSON walks ---------------------------------------------------
 
 test("collectEnvironments reads nested React payloads", () => {
@@ -326,6 +389,17 @@ test("timeAgo is compact", () => {
   assert.equal(ago(2 * 864e5), "2d ago");
   assert.equal(timeAgo(null), "");
   assert.equal(timeAgo("not a date"), "");
+});
+
+test("duration reads at a glance", () => {
+  const t = (a, b) => duration(a, b);
+  assert.equal(t("2026-08-05T09:00:00Z", "2026-08-05T09:00:45Z"), "45s");
+  assert.equal(t("2026-08-05T09:00:00Z", "2026-08-05T09:03:00Z"), "3m");
+  assert.equal(t("2026-08-05T09:00:00Z", "2026-08-05T09:03:20Z"), "3m 20s");
+  assert.equal(t("2026-08-05T09:00:00Z", "2026-08-05T10:04:00Z"), "1h 04m");
+  // A job still running has no end, and clock skew must not print nonsense.
+  assert.equal(t("2026-08-05T09:00:00Z", null), "");
+  assert.equal(t("2026-08-05T09:05:00Z", "2026-08-05T09:00:00Z"), "");
 });
 
 test("shortSha trims to the usual seven", () => {

@@ -22,6 +22,11 @@ history:
           Description   Automatic deployment from workflow "Deploy" #4821
           Links         View logs · Open environment
 
+          ACTIONS JOBS ↗
+          🟩 build                                            2m 14s
+          🟩 test (unit)                                      4m 03s
+          🟥 deploy (staging) / terraform apply               1m 20s
+
           PAST DEPLOYMENTS ↗
           🟩 v2.3.1                    main    9f2e10c   2d ago · @alice
           🟩 v2.3.0            hotfix/cache    41ab7c3   6d ago · @alice
@@ -77,7 +82,8 @@ real states, actors, payloads and log URLs. More reliable, and the only option
 for repos you can't reach from this browser session. Scopes:
 
 - classic: `repo`
-- fine-grained: read access to *Deployments*, *Environments*, *Contents*
+- fine-grained: read access to *Deployments*, *Environments*, *Contents* and
+  *Actions* (the last one only for the jobs list)
 
 The token lives in `chrome.storage.local` for this profile only. **Settings →
 Test** verifies it.
@@ -89,8 +95,9 @@ fallback; with no token, only the session is used.
 
 - **Repos are collapsed by default.** What you expand is remembered across
   popup openings.
-- **History is fetched lazily** — only when you expand an environment, and only
-  the latest 10 — so the initial dashboard stays cheap.
+- **History and Actions jobs are fetched lazily** — only when you expand an
+  environment, in parallel, and only the latest 10 deployments — so the initial
+  dashboard stays cheap.
 - Results are cached (default 120s) so reopening the popup is instant.
   **Refresh** re-fetches everything and drops the history cache too.
 - Repos are fetched 4 at a time, environments within a repo likewise.
@@ -98,6 +105,23 @@ fallback; with no token, only the session is used.
 - The deployed **branch** gets its own column on every row, next to the commit,
   and is labelled *Branch*, *Tag* or *Ref commit* in the detail panel according
   to what the ref actually is.
+
+### Getting to the Actions jobs
+
+Expanding an environment lists the jobs of the workflow run that performed the
+current deployment: name, outcome, how long it took, each linking to its own
+job page. The ↗ beside the heading opens the whole run, and every past
+deployment carries its own ↗ to the run that produced it.
+
+The run is found from the deployment status's `log_url`, which is where the
+`deployments` API puts it. Some tooling instead puts the deployed site in
+`target_url`; when no run can be read from either, the extension falls back to
+searching workflow runs for the deployed commit, preferring one whose name
+mentions the environment.
+
+**This section needs a token.** There is no dependable way to read a run's jobs
+out of the rendered page, so in session-only mode the jobs list is replaced by
+a direct link to the run whenever the deployment tells us where it is.
 
 Almost everything on screen is a link back to where it came from:
 
@@ -137,10 +161,12 @@ src/
     config.js              storage + URL derivation
     state.js               state -> 🟩🟧🟥⬜, and the two orderings
     deployment.js          the shape both auth paths produce
+    rest.js                one authenticated REST call
     github-api.js          PAT path (REST API)
+    github-actions.js      the workflow run behind a deployment, and its jobs
     github-html.js         session path (page scraping)
     loader.js              auth selection, rollup, caching, concurrency
-    util.js                mapLimit, timeAgo, shortSha
+    util.js                mapLimit, timeAgo, duration, shortSha
 ```
 
 ## Known limits
@@ -156,5 +182,7 @@ src/
   published elsewhere the link can 404. Nested `ghcr.io` paths and third-party
   registries are left unlinked rather than guessed at.
 - The REST path costs 1 + 2N requests per repo (N = environments) for the
-  dashboard, plus 1 + 10 when an environment is expanded. The cache keeps this
-  in check.
+  dashboard, plus 1 + 10 for history and 1–2 for jobs when an environment is
+  expanded. The cache keeps this in check.
+- Jobs are shown for the *current* deployment of an environment. Past
+  deployments link to their run rather than listing its jobs inline.

@@ -1,8 +1,15 @@
-import { loadConfig, deploymentsUrl } from "./lib/config.js";
-import { loadAll, loadHistory, orderedRepos, readCache, HISTORY_LIMIT } from "./lib/loader.js";
+import { loadConfig, deploymentsUrl, webBase } from "./lib/config.js";
+import {
+  loadAll,
+  loadHistory,
+  loadJobs,
+  orderedRepos,
+  readCache,
+  HISTORY_LIMIT,
+} from "./lib/loader.js";
 import { deploymentSubtitle } from "./lib/deployment.js";
 import { EMOJI, BUCKET_LABEL, stateLabel } from "./lib/state.js";
-import { timeAgo, shortSha } from "./lib/util.js";
+import { timeAgo, duration, shortSha } from "./lib/util.js";
 
 const reposEl = document.getElementById("repos");
 const emptyEl = document.getElementById("empty");
@@ -151,7 +158,7 @@ function renderEnv(result, env) {
   if (isOpen(key)) box.open = true;
   box.addEventListener("toggle", () => {
     setOpen(key, box.open);
-    if (box.open) fillHistory(box, result, env.name);
+    if (box.open) fillDetails(box, result, env);
   });
 
   const summary = el("summary", { class: "row env-row" });
@@ -170,11 +177,18 @@ function renderEnv(result, env) {
 
   const body = el("div", { class: "body" });
   body.append(latest ? renderFacts(latest) : el("div", { class: "note" }, "No deployments yet"));
-  body.append(el("div", { class: "history" }, el("div", { class: "note" }, "…")));
+  if (latest) body.append(el("div", { class: "jobs" }));
+  body.append(el("div", { class: "history" }));
   box.append(body);
 
-  if (box.open) fillHistory(box, result, env.name);
+  if (box.open) fillDetails(box, result, env);
   return box;
+}
+
+/** Jobs and history load together, in parallel, the first time you expand. */
+function fillDetails(box, result, env) {
+  fillHistory(box, result, env.name);
+  if (env.latest) fillJobs(box, result, env.latest);
 }
 
 function envMeta(latest) {
@@ -235,6 +249,78 @@ function addFact(dl, label, value, wide = false) {
   dl.append(el("dt", cls, label), el("dd", cls, value));
 }
 
+// --- Actions jobs ----------------------------------------------------------
+
+async function fillJobs(box, result, deployment) {
+  const container = box.querySelector(".jobs");
+  if (!container || container.dataset.loaded === "yes" || container.dataset.loading === "yes") {
+    return;
+  }
+  container.dataset.loading = "yes";
+  container.replaceChildren(el("div", { class: "note" }, "Loading jobs…"));
+
+  try {
+    const run = await loadJobs(config, result, deployment, { signal: controller?.signal });
+    container.replaceChildren(renderJobs(run, result));
+    container.dataset.loaded = "yes";
+  } catch (err) {
+    if (err?.name === "AbortError") return;
+    container.replaceChildren(jobsFallback(err, deployment));
+  } finally {
+    container.dataset.loading = "no";
+  }
+}
+
+function renderJobs(run, result) {
+  const wrap = el("div");
+  const runUrl = `${repoUrl(result)}/actions/runs/${run.runId}`;
+
+  wrap.append(
+    el("div", { class: "section-head" },
+      el("span", {}, "Actions jobs"),
+      openLink(runUrl, "Open the workflow run")
+    )
+  );
+
+  if (!run.jobs.length) {
+    wrap.append(el("div", { class: "note" }, "This run reported no jobs"));
+    return wrap;
+  }
+
+  const list = el("ul", { class: "row-list" });
+  for (const job of run.jobs) {
+    const item = el("li", { class: "row job-row", title: jobTooltip(job) });
+    item.append(
+      el("span", { class: "dot" }, EMOJI[job.bucket]),
+      maybeLink(job.url, job.name, "job-name"),
+      el("span", { class: "grow" }),
+      el("span", { class: "meta" }, duration(job.startedAt, job.completedAt))
+    );
+    list.append(item);
+  }
+  wrap.append(list);
+  return wrap;
+}
+
+function jobTooltip(job) {
+  const state = job.conclusion || job.status;
+  return `${job.name}: ${stateLabel(state)}`;
+}
+
+/**
+ * Without a token we can't list jobs, but we can still hand over the link to
+ * the run when the deployment told us where it is.
+ */
+function jobsFallback(err, deployment) {
+  const wrap = el("div", { class: "note" });
+  if (deployment.runUrl) {
+    wrap.append(link(deployment.runUrl, "Open the Actions run ↗"), ` — ${err.message}`);
+  } else {
+    wrap.append(err.message || "Could not load jobs");
+  }
+  return wrap;
+}
+
 // --- history ---------------------------------------------------------------
 
 async function fillHistory(box, result, envName) {
@@ -258,7 +344,7 @@ async function fillHistory(box, result, envName) {
 function renderHistory(deployments, result, envName) {
   const wrap = el("div");
   wrap.append(
-    el("div", { class: "history-head" },
+    el("div", { class: "section-head" },
       el("span", {}, `Past deployments`),
       openLink(activityUrl(result, envName), "Open activity log")
     )
@@ -271,7 +357,7 @@ function renderHistory(deployments, result, envName) {
     return wrap;
   }
 
-  const list = el("ul", { class: "history-list" });
+  const list = el("ul", { class: "row-list" });
   for (const d of past) {
     const item = el("li", { class: "row history-row", title: stateTooltip(d) });
     const label = deploymentSubtitle(d, { hasShaColumn: true }) || stateLabel(d.state);
@@ -281,7 +367,9 @@ function renderHistory(deployments, result, envName) {
       el("span", { class: "grow" }),
       branchCell(d),
       d.sha ? link(d.shaUrl, shortSha(d.sha), "sha mono") : el("span", { class: "sha mono" }, "—"),
-      el("span", { class: "meta" }, envMeta(d))
+      el("span", { class: "meta" }, envMeta(d)),
+      // Each past deployment keeps a route back to the run that produced it.
+      d.runUrl ? openLink(d.runUrl, "Open the Actions run") : el("span", { class: "open" })
     );
     list.append(item);
   }
@@ -302,6 +390,10 @@ function historyError(err, result) {
 
 function activityUrl(result, envName) {
   return `${deploymentsUrl(config, result.owner, result.repo)}/activity_log?environments_filter=${encodeURIComponent(envName)}`;
+}
+
+function repoUrl(result) {
+  return `${webBase(config)}/${result.owner}/${result.repo}`;
 }
 
 // --- small DOM helpers -----------------------------------------------------
