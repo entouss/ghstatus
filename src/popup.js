@@ -1,4 +1,4 @@
-import { loadConfig, deploymentsUrl, webBase } from "./lib/config.js";
+import { loadConfig, deploymentsUrl, environmentUrl, webBase } from "./lib/config.js";
 import {
   loadAll,
   loadHistory,
@@ -171,7 +171,10 @@ function renderEnv(result, env) {
     el("span", { class: "grow" }),
     branchCell(latest),
     el("span", { class: "meta" }, envMeta(latest)),
-    openLink(activityUrl(result, env.name), "Open activity log")
+    openLink(
+      environmentUrl(config, result.owner, result.repo, env.name),
+      "Open this environment's latest deployment"
+    )
   );
   box.append(summary);
 
@@ -368,8 +371,9 @@ function renderHistory(deployments, result, envName) {
       branchCell(d),
       d.sha ? link(d.shaUrl, shortSha(d.sha), "sha mono") : el("span", { class: "sha mono" }, "—"),
       el("span", { class: "meta" }, envMeta(d)),
-      // Each past deployment keeps a route back to the run that produced it.
-      d.runUrl ? openLink(d.runUrl, "Open the Actions run") : el("span", { class: "open" })
+      // Straight to the job that deployed, falling back to the whole run when
+      // we could not resolve one.
+      jobLink(d)
     );
     list.append(item);
   }
@@ -379,6 +383,12 @@ function renderHistory(deployments, result, envName) {
     wrap.append(el("div", { class: "hint" }, `Showing the latest ${HISTORY_LIMIT}.`));
   }
   return wrap;
+}
+
+function jobLink(d) {
+  if (d.jobUrl) return openLink(d.jobUrl, "Open the Actions job that deployed this");
+  if (d.runUrl) return openLink(d.runUrl, "Open the Actions run");
+  return el("span", { class: "open" });
 }
 
 function historyError(err, result) {

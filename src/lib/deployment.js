@@ -31,6 +31,7 @@ import { shortSha } from "./util.js";
  * @property {string|null} environment name of the environment deployed to
  * @property {string|null} runId       Actions run that performed it, if known
  * @property {string|null} runUrl
+ * @property {string|null} jobUrl      the job within that run that deployed
  */
 
 export function emptyDeployment(overrides = {}) {
@@ -58,6 +59,7 @@ export function emptyDeployment(overrides = {}) {
     environment: null,
     runId: null,
     runUrl: null,
+    jobUrl: null,
     ...overrides,
   };
 }

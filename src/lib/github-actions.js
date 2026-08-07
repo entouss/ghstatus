@@ -63,13 +63,43 @@ export function runIdFromUrl(url) {
 export async function fetchDeploymentJobs(config, owner, repo, deployment, { signal } = {}) {
   const runId = deployment.runId || (await findRunId(config, owner, repo, deployment, { signal }));
   if (!runId) throw new Error("No Actions run found for this deployment");
+  return { runId, jobs: await fetchRunJobs(config, owner, repo, runId, { signal }) };
+}
 
+/** @returns {Promise<Job[]>} */
+export async function fetchRunJobs(config, owner, repo, runId, { signal } = {}) {
   const data = await api(
     config,
     `/repos/${owner}/${repo}/actions/runs/${runId}/jobs?per_page=100&filter=latest`,
     { signal }
   );
-  return { runId, jobs: (data.jobs || []).map(describeJob) };
+  return (data.jobs || []).map(describeJob);
+}
+
+/**
+ * Which job in a run actually did the deploying — the one a past deployment
+ * row should link to. A run has build, test and deploy jobs; the interesting
+ * one names the environment, or failed, or ran last.
+ * @returns {Job|null}
+ */
+export function pickDeployJob(jobs, deployment = {}) {
+  if (!jobs?.length) return null;
+
+  const environment = deployment.environment;
+  if (environment) {
+    const named = jobs.find((job) =>
+      job.name.toLowerCase().includes(environment.toLowerCase())
+    );
+    if (named) return named;
+  }
+
+  // A failed deployment is asking "what broke", so point at what broke.
+  if (deployment.bucket === "bad") {
+    const failed = jobs.find((job) => job.bucket === "bad");
+    if (failed) return failed;
+  }
+
+  return jobs[jobs.length - 1];
 }
 
 /**

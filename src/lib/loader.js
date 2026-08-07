@@ -110,10 +110,37 @@ export async function loadHistory(config, result, environment, { signal } = {}) 
     HISTORY_LIMIT,
     { signal }
   );
+  await attachJobLinks(config, result, deployments, { signal });
 
   cache[cacheKey] = { deployments, fetchedAt: Date.now() };
   await chrome.storage.local.set({ [HISTORY_KEY]: cache });
   return deployments;
+}
+
+/**
+ * Point each past deployment at the job that deployed it. Runs are looked up
+ * once each, since consecutive deployments often share one, and a failure here
+ * is not worth failing the history over — those rows fall back to the run.
+ */
+async function attachJobLinks(config, result, deployments, { signal }) {
+  if (!config.token) return;
+
+  const runIds = [...new Set(deployments.map((d) => d.runId).filter(Boolean))];
+  if (!runIds.length) return;
+
+  const jobsByRun = new Map();
+  await mapLimit(runIds, CONCURRENCY, async (runId) => {
+    try {
+      jobsByRun.set(runId, await actions.fetchRunJobs(config, result.owner, result.repo, runId, { signal }));
+    } catch (err) {
+      if (err?.name === "AbortError") throw err;
+    }
+  });
+
+  for (const deployment of deployments) {
+    const jobs = jobsByRun.get(deployment.runId);
+    if (jobs) deployment.jobUrl = actions.pickDeployJob(jobs, deployment)?.url || null;
+  }
 }
 
 /**

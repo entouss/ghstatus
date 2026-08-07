@@ -113,6 +113,12 @@ current deployment: name, outcome, how long it took, each linking to its own
 job page. The ↗ beside the heading opens the whole run, and every past
 deployment carries its own ↗ to the run that produced it.
 
+Each **past deployment** links straight to the job that deployed it —
+`/actions/runs/<runId>/job/<jobId>`. Runs list several jobs, so the one picked
+is, in order: a job naming the environment, then a failed job if the deployment
+failed, then the last job in the run. Where none can be resolved the row falls
+back to the run as a whole.
+
 The run is found from the deployment status's `log_url`, which is where the
 `deployments` API puts it. Some tooling instead puts the deployed site in
 `target_url`; when no run can be read from either, the extension falls back to
@@ -133,7 +139,10 @@ Almost everything on screen is a link back to where it came from:
 | Branch / Tag | `/tree/<ref>` |
 | Version | `/releases/tag/<v>`, only when the version *is* the deployed tag |
 | Image | the package page — `ghcr.io` under this repo, or Docker Hub |
-| ↗ | the repo's deployments page, or the environment's activity log |
+| ↗ on a repo | `/deployments` |
+| ↗ on an environment | `/deployments/<environment>` — its latest deployment |
+| ↗ on **Past deployments** | the environment's full activity log |
+| ↗ on a past deployment | `/actions/runs/<runId>/job/<jobId>` |
 
 Where a link can't be derived with confidence the value is shown as plain
 text rather than pointed somewhere that might 404.
@@ -182,7 +191,9 @@ src/
   published elsewhere the link can 404. Nested `ghcr.io` paths and third-party
   registries are left unlinked rather than guessed at.
 - The REST path costs 1 + 2N requests per repo (N = environments) for the
-  dashboard, plus 1 + 10 for history and 1–2 for jobs when an environment is
-  expanded. The cache keeps this in check.
+  dashboard. Expanding an environment adds 1 + 10 for history, 1–2 for the jobs
+  list, and one per distinct run among the past deployments to resolve their
+  job links. The cache keeps this in check, and a missing job link degrades to
+  the run rather than failing the history.
 - Jobs are shown for the *current* deployment of an environment. Past
   deployments link to their run rather than listing its jobs inline.

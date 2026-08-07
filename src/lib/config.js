@@ -38,6 +38,11 @@ export function deploymentsUrl(config, owner, repo) {
   return `${webBase(config)}/${owner}/${repo}/deployments`;
 }
 
+/** GitHub's page for one environment, showing its latest deployment. */
+export function environmentUrl(config, owner, repo, environment) {
+  return `${deploymentsUrl(config, owner, repo)}/${encodeURIComponent(environment)}`;
+}
+
 /**
  * Split "org/repo" (or a full URL to one) into its parts.
  * @returns {{owner: string, repo: string}|null}

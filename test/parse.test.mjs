@@ -14,9 +14,14 @@ import {
   refKind,
   imageUrl,
 } from "../src/lib/deployment.js";
-import { parseRepo } from "../src/lib/config.js";
+import { parseRepo, environmentUrl } from "../src/lib/config.js";
 import { mapLimit, timeAgo, duration, shortSha } from "../src/lib/util.js";
-import { runIdFromUrl, jobBucket, describeJob } from "../src/lib/github-actions.js";
+import {
+  runIdFromUrl,
+  jobBucket,
+  describeJob,
+  pickDeployJob,
+} from "../src/lib/github-actions.js";
 
 const REPO_URL = "https://github.com/my-org/api";
 
@@ -287,6 +292,56 @@ test("describeJob normalises the fields the row needs", () => {
   assert.equal(job.name, "deploy (production)");
   assert.equal(job.bucket, "ok");
   assert.equal(duration(job.startedAt, job.completedAt), "3m 20s");
+});
+
+test("pickDeployJob finds the job a deployment row should open", () => {
+  const jobs = [
+    { name: "build", bucket: "ok", url: "u/build" },
+    { name: "test", bucket: "ok", url: "u/test" },
+    { name: "deploy (production)", bucket: "ok", url: "u/deploy-prod" },
+    { name: "notify", bucket: "ok", url: "u/notify" },
+  ];
+
+  // Naming the environment beats every other signal.
+  assert.equal(pickDeployJob(jobs, { environment: "production" }).url, "u/deploy-prod");
+  // With nothing to match on, the last job is the one that finished the work.
+  assert.equal(pickDeployJob(jobs, {}).url, "u/notify");
+
+  // A failed deployment should land on what actually broke.
+  const broken = [
+    { name: "build", bucket: "ok", url: "u/build" },
+    { name: "migrate", bucket: "bad", url: "u/migrate" },
+    { name: "notify", bucket: "idle", url: "u/notify" },
+  ];
+  assert.equal(pickDeployJob(broken, { bucket: "bad" }).url, "u/migrate");
+  // ...but an environment match still wins, since it is the more specific one.
+  assert.equal(
+    pickDeployJob([...broken, { name: "ship to staging", bucket: "ok", url: "u/ship" }], {
+      bucket: "bad",
+      environment: "staging",
+    }).url,
+    "u/ship"
+  );
+
+  assert.equal(pickDeployJob([], { environment: "production" }), null);
+  assert.equal(pickDeployJob(undefined), null);
+});
+
+test("environmentUrl points at the environment's own page", () => {
+  const config = { host: "github.com" };
+  assert.equal(
+    environmentUrl(config, "my-org", "api", "production"),
+    "https://github.com/my-org/api/deployments/production"
+  );
+  // Environment names are free text and become a single path segment.
+  assert.equal(
+    environmentUrl(config, "my-org", "api", "prod eu/west"),
+    "https://github.com/my-org/api/deployments/prod%20eu%2Fwest"
+  );
+  assert.equal(
+    environmentUrl({ host: "github.example.com" }, "my-org", "api", "production"),
+    "https://github.example.com/my-org/api/deployments/production"
+  );
 });
 
 // --- embedded JSON walks ---------------------------------------------------
