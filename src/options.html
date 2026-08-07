@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Deployment status — settings</title>
+    <link rel="stylesheet" href="options.css" />
+  </head>
+  <body>
+    <h1>Deployment status</h1>
+
+    <section>
+      <label for="repos">Repositories</label>
+      <p class="hint">One per line, as <code>org/repo</code>. Full URLs work too.</p>
+      <textarea id="repos" rows="8" spellcheck="false" placeholder="my-org/api&#10;my-org/web"></textarea>
+    </section>
+
+    <section>
+      <label for="authMode">Authentication</label>
+      <select id="authMode">
+        <option value="auto">Auto — token if set, otherwise browser session</option>
+        <option value="session">Browser session only (no token)</option>
+        <option value="pat">Personal access token only</option>
+      </select>
+      <p class="hint">
+        Session auth reuses your github.com login and reads the deployments page.
+        A token uses the REST API, which is more reliable and the only option for
+        repos you can't open in this browser profile.
+      </p>
+    </section>
+
+    <section>
+      <label for="token">Personal access token</label>
+      <p class="hint">
+        Needs <code>repo</code> scope (classic) or read access to
+        <em>Deployments</em>, <em>Environments</em> and <em>Contents</em>
+        (fine-grained). Stored in this browser's extension storage.
+      </p>
+      <div class="row">
+        <input id="token" type="password" autocomplete="off" spellcheck="false" placeholder="ghp_… / github_pat_…" />
+        <button id="test" type="button">Test</button>
+      </div>
+      <p id="token-result" class="hint result"></p>
+    </section>
+
+    <details>
+      <summary>Advanced</summary>
+      <section>
+        <label for="host">GitHub host</label>
+        <p class="hint">Change only for GitHub Enterprise Server, e.g. <code>github.example.com</code>.</p>
+        <input id="host" type="text" spellcheck="false" placeholder="github.com" />
+      </section>
+      <section>
+        <label for="cacheTtlSeconds">Cache results for (seconds)</label>
+        <input id="cacheTtlSeconds" type="number" min="0" max="3600" step="10" />
+      </section>
+    </details>
+
+    <div class="footer">
+      <button id="save" type="button" class="primary">Save</button>
+      <span id="saved" class="hint"></span>
+    </div>
+
+    <script type="module" src="options.js"></script>
+  </body>
+</html>

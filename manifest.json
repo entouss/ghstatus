@@ -1,0 +1,29 @@
+{
+  "manifest_version": 3,
+  "name": "GH Deployment Status",
+  "version": "0.1.0",
+  "description": "Dashboard of deployment status per repo and environment on GitHub.",
+  "permissions": ["storage"],
+  "host_permissions": [
+    "https://github.com/*",
+    "https://api.github.com/*"
+  ],
+  "optional_host_permissions": ["https://*/*"],
+  "action": {
+    "default_title": "GH Deployment Status",
+    "default_popup": "src/popup.html",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "32": "icons/icon32.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "options_page": "src/options.html",
+  "icons": {
+    "16": "icons/icon16.png",
+    "32": "icons/icon32.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  }
+}

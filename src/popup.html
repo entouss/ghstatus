@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Deployment status</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <header>
+      <h1>Deployments</h1>
+      <div class="actions">
+        <button id="refresh" title="Refresh now">Refresh</button>
+        <button id="options" title="Settings">Settings</button>
+      </div>
+    </header>
+
+    <main id="repos" aria-live="polite"></main>
+
+    <p id="empty" class="empty" hidden>
+      No repositories yet. <button class="link" id="empty-options">Add some</button>.
+    </p>
+
+    <footer>
+      <span id="status"></span>
+      <span class="legend">
+        <span title="Success">&#x1F7E9;</span>
+        <span title="In progress / waiting">&#x1F7E7;</span>
+        <span title="Failed">&#x1F7E5;</span>
+        <span title="Inactive / none">&#x2B1C;</span>
+      </span>
+    </footer>
+
+    <script type="module" src="popup.js"></script>
+  </body>
+</html>
