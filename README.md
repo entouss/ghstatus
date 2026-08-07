@@ -17,6 +17,7 @@ history:
     ▾ 🟥 staging     ghcr.io/…:2.4.0-rc1           12m ago · @bob
           Status        🟥 Failure          Updated  12m ago
           Triggered by  @bob                Commit   abc1234
+          Workflow      Deploy              Job      deploy (staging)
           Version       2.4.0-rc1
           Image         ghcr.io/my-org/api:2.4.0-rc1
           Description   Automatic deployment from workflow "Deploy" #4821
@@ -51,6 +52,26 @@ Note this is the opposite of how a single card is read — there, a run happenin
 
 A deployment that GitHub has created but not yet reported a status for is shown
 as 🟧 in progress rather than blank, marked *(no status reported)*.
+
+**`inactive` is not an outcome.** GitHub appends an `inactive` status to a
+deployment once a later one supersedes it, which says nothing about whether it
+worked — reading only the latest status makes every past deployment look ⬜.
+The dot shows the most recent status that was something other than `inactive`,
+with "superseded" noted in the tooltip. That status is also the one carrying
+`log_url`, so this is what lets past deployments reach their Actions run.
+
+### Tooltips
+
+GitHub's deployment vocabulary is easy to mix up, so every tooltip names the
+concept it is showing — REPOSITORY, ENVIRONMENT, DEPLOYMENT, WORKFLOW, WORKFLOW
+RUN, JOB, COMMIT — explains it in a line, and then prints the API objects
+behind it as JSON.
+
+The JSON is a curated shape, not the raw response: a real deployment object is
+several kilobytes of app metadata that would push the interesting fields out of
+a tooltip. Empty fields are dropped. Hovering a job shows both `status` (where
+it is in its lifecycle) and `conclusion` (how it ended) together, since that
+pair is the usual source of confusion.
 
 ## Install
 

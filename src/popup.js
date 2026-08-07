@@ -110,7 +110,7 @@ function renderRepo(repo, result) {
   const summary = el("summary", { class: "row repo-row" });
   summary.append(
     chevron(),
-    el("span", { class: "dot", title: result ? BUCKET_LABEL[result.bucket] : "Loading" },
+    el("span", { class: "dot", title: repoTooltip(result, envCount) },
       result ? EMOJI[result.bucket] : EMOJI.idle),
     repoLabel(repo),
     el("span", { class: "grow" }),
@@ -137,6 +137,14 @@ function repoLabel(repo) {
   const name = el("span", { class: "repo-name", title: repo.key });
   name.append(el("span", { class: "owner" }, `${repo.owner}/`), repo.repo);
   return name;
+}
+
+function repoTooltip(result, envCount) {
+  if (!result) return "Loading…";
+  return concept("REPOSITORY", [
+    `Rolled up from ${envCount} environment${envCount === 1 ? "" : "s"}:`,
+    `the worst state among them is ${BUCKET_LABEL[result.bucket]}.`,
+  ]);
 }
 
 function repoMeta(result, envCount) {
@@ -166,7 +174,8 @@ function renderEnv(result, env) {
   summary.append(
     chevron(),
     el("span", { class: "dot", title: stateTooltip(latest) }, EMOJI[bucket]),
-    el("span", { class: "env-name" }, env.name),
+    el("span", { class: "env-name", title: concept(ENVIRONMENT, [env.name], env.rawJson) },
+      env.name),
     subtitle ? el("span", { class: "tag" }, subtitle) : "",
     el("span", { class: "grow" }),
     el("span", { class: "meta" }, envMeta(latest)),
@@ -201,12 +210,35 @@ function envMeta(latest) {
   return parts.join(" · ");
 }
 
-function stateTooltip(latest) {
-  if (!latest) return "No deployments";
-  const parts = [`${stateLabel(latest.state)} (${BUCKET_LABEL[latest.bucket]})`];
-  if (latest.inferredState) parts.push("no status reported yet — assumed in progress");
-  if (latest.updatedAt) parts.push(formatDate(latest.updatedAt));
+/**
+ * Tooltips name the GitHub concept first, then explain, then show the API
+ * objects behind it — these terms are easy to mix up, and seeing the JSON is
+ * the quickest way to tell which is which.
+ */
+function concept(name, lines = [], json = null) {
+  const parts = [name, ...lines.filter(Boolean)];
+  if (json) parts.push("", json);
   return parts.join("\n");
+}
+
+const DEPLOYMENT = "DEPLOYMENT — a request to deploy one commit to one environment";
+const ENVIRONMENT = "ENVIRONMENT — a named deploy target, with its own protection rules";
+const WORKFLOW = "WORKFLOW — the Actions workflow whose run produced this deployment";
+const JOB = "JOB — one job inside that workflow run; a job is where the steps run";
+const COMMIT = "COMMIT — the code that was deployed";
+
+function stateTooltip(d) {
+  if (!d) return concept(DEPLOYMENT, ["None yet for this environment"]);
+
+  const lines = [`Status: ${stateLabel(d.state)} (${BUCKET_LABEL[d.bucket]})`];
+  if (d.superseded) {
+    lines.push("Superseded — a later deployment replaced this one, so GitHub");
+    lines.push("also marked it 'inactive'. The status above is its own outcome.");
+  }
+  if (d.inferredState) lines.push("No status reported yet — assumed in progress");
+  if (d.updatedAt) lines.push(`Updated: ${formatDate(d.updatedAt)}`);
+  if (d.actor) lines.push(`Triggered by: @${d.actor}`);
+  return concept(DEPLOYMENT, lines, d.rawJson);
 }
 
 // --- deployment detail -----------------------------------------------------
@@ -218,6 +250,8 @@ function renderFacts(d) {
   addFact(dl, "Updated", d.updatedAt ? absolute(d.updatedAt) : null);
   addFact(dl, "Triggered by", d.actor ? maybeLink(d.actorUrl, `@${d.actor}`) : null);
   addFact(dl, "Commit", d.sha ? maybeLink(d.shaUrl, shortSha(d.sha), "mono") : null);
+  addFact(dl, "Workflow", d.workflowName || null);
+  addFact(dl, "Job", d.jobName ? maybeLink(d.jobUrl, d.jobName, "") : null);
   addFact(dl, "Version", d.version ? maybeLink(d.versionUrl, d.version, "mono") : null);
   // These three run long, so they take a row to themselves.
   addFact(dl, "Image", d.image ? maybeLink(d.imageUrl, d.image, "mono wrap") : null, true);
@@ -239,10 +273,23 @@ function statusValue(d) {
   return span;
 }
 
+/** What each field of the detail panel actually is, in GitHub's own terms. */
+const FACT_HELP = {
+  Status: "DEPLOYMENT STATUS — the outcome reported against this deployment.\nA deployment can collect several; this is the latest meaningful one.",
+  Updated: "When that deployment status was set",
+  "Triggered by": "The account that created the deployment — often a bot for\nworkflow-driven deploys",
+  Commit: COMMIT,
+  Version: "Read out of the deployment's free-form payload",
+  Image: "Read out of the deployment's free-form payload",
+  Description: "Free text set by whatever created the deployment",
+  Links: "URLs carried on the deployment status: log_url and environment_url",
+};
+
 function addFact(dl, label, value, wide = false) {
   if (value === null || value === undefined || value === "") return;
-  const cls = wide ? { class: "wide" } : {};
-  dl.append(el("dt", cls, label), el("dd", cls, value));
+  const attrs = { title: FACT_HELP[label] || label };
+  if (wide) attrs.class = "wide";
+  dl.append(el("dt", attrs, label), el("dd", wide ? { class: "wide" } : {}, value));
 }
 
 // --- Actions jobs ----------------------------------------------------------
@@ -273,7 +320,9 @@ function renderJobs(run, result) {
 
   wrap.append(
     el("div", { class: "section-head" },
-      el("span", {}, "Actions jobs"),
+      el("span", { title: concept("WORKFLOW RUN — one execution of a workflow", [
+        "These are the jobs of the run that produced the current deployment.",
+      ]) }, "Actions jobs"),
       openLink(runUrl, "Open the workflow run")
     )
   );
@@ -299,8 +348,16 @@ function renderJobs(run, result) {
 }
 
 function jobTooltip(job) {
-  const state = job.conclusion || job.status;
-  return `${job.name}: ${stateLabel(state)}`;
+  const lines = [
+    `Name: ${job.name}`,
+    // These two are constantly confused: status is where the job is in its
+    // lifecycle, conclusion is how it ended.
+    `Status: ${stateLabel(job.status)} — where it is in its lifecycle`,
+    `Conclusion: ${job.conclusion ? stateLabel(job.conclusion) : "not finished yet"} — how it ended`,
+  ];
+  const ran = duration(job.startedAt, job.completedAt);
+  if (ran) lines.push(`Ran for: ${ran}`);
+  return concept(JOB, lines, job.rawJson);
 }
 
 /**
@@ -340,7 +397,13 @@ async function fillHistory(box, result, envName) {
 function renderHistory(deployments) {
   const wrap = el("div");
   // No link on the heading itself — each row below carries its own.
-  wrap.append(el("div", { class: "section-head" }, el("span", {}, "Past deployments")));
+  wrap.append(
+    el("div", { class: "section-head" },
+      el("span", { title: concept(DEPLOYMENT, [
+        "Earlier deployments to this environment, newest first.",
+      ]) }, "Past deployments")
+    )
+  );
 
   // The newest entry is already spelled out in the facts above.
   const past = deployments.slice(1);
@@ -357,9 +420,12 @@ function renderHistory(deployments) {
     item.append(
       el("div", { class: "row" },
         el("span", { class: "dot" }, EMOJI[d.bucket]),
-        el("span", { class: "workflow" }, d.workflowName || ""),
+        el("span", { class: "workflow", title: concept(WORKFLOW, [d.workflowName], d.jobJson) },
+          d.workflowName || ""),
         el("span", { class: "grow" }),
-        d.sha ? link(d.shaUrl, shortSha(d.sha), "sha mono") : el("span", { class: "sha mono" }, "—"),
+        d.sha
+          ? link(d.shaUrl, shortSha(d.sha), "sha mono", concept(COMMIT, [d.sha]))
+          : el("span", { class: "sha mono" }, "—"),
         el("span", { class: "meta" }, envMeta(d)),
         // Straight to the job that deployed, falling back to the whole run when
         // we could not resolve one.
@@ -368,7 +434,11 @@ function renderHistory(deployments) {
     );
     // The job goes on its own line: names like "deploy / terraform apply" need
     // more room than a column can give them.
-    if (d.jobName) item.append(el("div", { class: "job" }, d.jobName));
+    if (d.jobName) {
+      item.append(
+        el("div", { class: "job", title: concept(JOB, [d.jobName], d.jobJson) }, d.jobName)
+      );
+    }
     list.append(item);
   }
   wrap.append(list);
@@ -436,9 +506,10 @@ function maybeLink(href, text, className = "") {
   return link(href, text, className);
 }
 
-function link(href, text, className = "") {
+function link(href, text, className = "", title = "") {
   const a = el("a", { href, target: "_blank", rel: "noreferrer" }, text);
   if (className) a.className = className;
+  if (title) a.title = title;
   // Anchors inside a <summary> would otherwise toggle the disclosure too.
   a.addEventListener("click", (e) => e.stopPropagation());
   return a;

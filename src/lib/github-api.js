@@ -4,7 +4,7 @@
 import { webBase } from "./config.js";
 import { describeDeployment } from "./deployment.js";
 import { api } from "./rest.js";
-import { mapLimit } from "./util.js";
+import { mapLimit, toJsonSnippet } from "./util.js";
 
 const FANOUT = 4;
 
@@ -14,11 +14,26 @@ const FANOUT = 4;
  */
 export async function fetchRepoEnvironments(config, owner, repo, { signal } = {}) {
   const envs = await api(config, `/repos/${owner}/${repo}/environments?per_page=100`, { signal });
-  const names = (envs.environments || []).map((e) => e.name);
 
-  return mapLimit(names, FANOUT, async (name) => {
-    const [latest = null] = await fetchDeployments(config, owner, repo, name, 1, { signal });
-    return { name, latest };
+  return mapLimit(envs.environments || [], FANOUT, async (env) => {
+    const [latest = null] = await fetchDeployments(config, owner, repo, env.name, 1, { signal });
+    return { name: env.name, latest, rawJson: environmentJson(env) };
+  });
+}
+
+function environmentJson(env) {
+  return toJsonSnippet({
+    environment: {
+      id: env.id,
+      name: env.name,
+      created_at: env.created_at,
+      updated_at: env.updated_at,
+      protection_rules: (env.protection_rules || []).map((rule) => ({
+        type: rule.type,
+        wait_timer: rule.wait_timer,
+        reviewers: rule.reviewers?.length,
+      })),
+    },
   });
 }
 
@@ -36,12 +51,15 @@ export async function fetchDeployments(config, owner, repo, environment, limit, 
   const repoUrl = `${webBase(config)}/${owner}/${repo}`;
 
   return mapLimit(deployments, FANOUT, async (deployment) => {
+    // More than one status: GitHub appends an "inactive" one when a later
+    // deployment supersedes this, and that one hides both the outcome and the
+    // log URL of the status before it.
     const statuses = await api(
       config,
-      `/repos/${owner}/${repo}/deployments/${deployment.id}/statuses?per_page=1`,
+      `/repos/${owner}/${repo}/deployments/${deployment.id}/statuses?per_page=10`,
       { signal }
     );
-    return describeDeployment(repoUrl, deployment, statuses[0]);
+    return describeDeployment(repoUrl, deployment, statuses);
   });
 }
 

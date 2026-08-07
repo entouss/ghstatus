@@ -154,6 +154,7 @@ async function attachJobLinks(config, result, deployments, { signal }) {
     deployment.jobUrl = job?.url || deployment.jobUrl || null;
     deployment.jobName = job?.name || null;
     deployment.workflowName = job?.workflowName || deployment.workflowName || null;
+    deployment.jobJson = job?.rawJson || null;
   }
 }
 

@@ -5,6 +5,7 @@
 // site in target_url instead — we fall back to looking up runs by commit.
 
 import { api } from "./rest.js";
+import { toJsonSnippet } from "./util.js";
 
 /** GitHub's own conclusions, mapped onto the dashboard's four buckets. */
 const CONCLUSION_BUCKET = {
@@ -50,7 +51,35 @@ export function describeJob(job) {
     startedAt: job.started_at || null,
     completedAt: job.completed_at || null,
     url: job.html_url || null,
+    runId: job.run_id ? String(job.run_id) : null,
+    rawJson: jobJson(job),
   };
+}
+
+/**
+ * A Job as JSON, for the tooltip. `status` is where it is in its lifecycle and
+ * `conclusion` is how it ended — the pair trips people up, so both are here
+ * alongside the steps that make up the job.
+ */
+function jobJson(job) {
+  return toJsonSnippet({
+    job: {
+      id: job.id,
+      name: job.name,
+      workflow_name: job.workflow_name,
+      run_id: job.run_id,
+      run_attempt: job.run_attempt,
+      status: job.status,
+      conclusion: job.conclusion,
+      started_at: job.started_at,
+      completed_at: job.completed_at,
+      steps: (job.steps || []).map((step) => ({
+        name: step.name,
+        status: step.status,
+        conclusion: step.conclusion,
+      })),
+    },
+  });
 }
 
 /** Pull a run id out of a deployment's log/target URL. */

@@ -63,6 +63,28 @@ export function duration(from, to) {
   return `${Math.floor(minutes / 60)}h ${String(minutes % 60).padStart(2, "0")}m`;
 }
 
+const MAX_JSON = 1600;
+
+/**
+ * Pretty-print an object for a tooltip. Callers pass a curated shape rather
+ * than a raw API response: those carry kilobytes of app metadata that would
+ * push the fields worth reading past the cap.
+ */
+export function toJsonSnippet(value) {
+  let text;
+  try {
+    text = JSON.stringify(value, dropEmpty, 2);
+  } catch {
+    return null;
+  }
+  if (!text) return null;
+  return text.length > MAX_JSON ? `${text.slice(0, MAX_JSON)}\n  … truncated` : text;
+}
+
+function dropEmpty(key, value) {
+  return value === null || value === undefined || value === "" ? undefined : value;
+}
+
 export function shortSha(sha) {
   return sha ? String(sha).slice(0, 7) : null;
 }

@@ -4,7 +4,7 @@
 
 import { runIdFromUrl } from "./github-actions.js";
 import { bucketOf } from "./state.js";
-import { shortSha } from "./util.js";
+import { shortSha, toJsonSnippet } from "./util.js";
 
 /**
  * @typedef {object} Deployment
@@ -34,6 +34,8 @@ import { shortSha } from "./util.js";
  * @property {string|null} jobUrl      the job within that run that deployed
  * @property {string|null} jobName     that job's name
  * @property {string|null} workflowName the workflow the run belongs to
+ * @property {boolean} superseded    a later deployment replaced this one
+ * @property {string|null} rawJson   the API objects behind it, for the tooltip
  */
 
 export function emptyDeployment(overrides = {}) {
@@ -64,6 +66,9 @@ export function emptyDeployment(overrides = {}) {
     jobUrl: null,
     jobName: null,
     workflowName: null,
+    superseded: false,
+    rawJson: null,
+    jobJson: null,
     ...overrides,
   };
 }
@@ -72,10 +77,19 @@ export function emptyDeployment(overrides = {}) {
  * Fold a REST deployment + its latest status into a Deployment.
  * @param {string} repoUrl e.g. https://github.com/org/repo
  */
-export function describeDeployment(repoUrl, deployment, status) {
+export function describeDeployment(repoUrl, deployment, statuses) {
+  const list = Array.isArray(statuses) ? statuses : statuses ? [statuses] : [];
+  const latest = list[0] || null;
+
+  // GitHub marks a deployment inactive once a later one supersedes it. That
+  // says nothing about whether it worked, so the outcome is the most recent
+  // status that was something else — and it is the one carrying the log URL.
+  const status = list.find((s) => s && s.state !== "inactive") || latest;
+  const superseded = Boolean(latest && latest.state === "inactive" && status !== latest);
+
   // A deployment with no status row yet is work in flight, not an absence of
   // information — GitHub's own UI shows these as in progress.
-  const inferredState = !status;
+  const inferredState = !latest;
   const state = status?.state || "in_progress";
   const payload = readPayload(deployment.payload);
 
@@ -97,6 +111,8 @@ export function describeDeployment(repoUrl, deployment, status) {
       logUrl: status?.log_url || status?.target_url || null,
       siteUrl: status?.environment_url || null,
       environment: deployment.environment || null,
+      superseded,
+      rawJson: deploymentJson(deployment, list),
     }),
     repoUrl
   );
@@ -258,6 +274,36 @@ function pick(sources, keys) {
     }
   }
   return null;
+}
+
+/**
+ * The deployment and its statuses as JSON, for the tooltip. Two separate API
+ * objects — a Deployment records intent, a Deployment Status records what
+ * happened to it — and seeing them side by side is the point.
+ */
+export function deploymentJson(deployment, statuses) {
+  return toJsonSnippet({
+    deployment: {
+      id: deployment.id,
+      environment: deployment.environment,
+      ref: deployment.ref,
+      sha: deployment.sha,
+      task: deployment.task,
+      description: deployment.description,
+      creator: deployment.creator?.login,
+      payload: deployment.payload,
+      created_at: deployment.created_at,
+    },
+    statuses: statuses.map((s) => ({
+      state: s.state,
+      description: s.description,
+      log_url: s.log_url,
+      target_url: s.target_url,
+      environment_url: s.environment_url,
+      creator: s.creator?.login,
+      created_at: s.created_at,
+    })),
+  });
 }
 
 /** A ref is only interesting as a version when it looks like a release tag. */

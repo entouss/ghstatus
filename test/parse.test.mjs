@@ -104,6 +104,39 @@ test("describeDeployment folds a deployment and its status together", () => {
   assert.equal(d.siteUrl, "https://api.example.com");
 });
 
+test("an inactive status does not hide the outcome underneath it", () => {
+  // GitHub appends "inactive" when a later deployment supersedes this one.
+  // That is a lifecycle fact, not a verdict on whether the deploy worked.
+  const d = describeDeployment(REPO_URL, DEPLOYMENT, [
+    { state: "inactive", created_at: "2026-08-06T10:00:00Z" },
+    {
+      state: "success",
+      updated_at: "2026-08-05T09:04:00Z",
+      log_url: "https://github.com/my-org/api/actions/runs/4821",
+    },
+  ]);
+
+  assert.equal(d.state, "success");
+  assert.equal(d.bucket, "ok");
+  assert.equal(d.superseded, true);
+  // The inactive status carries no log_url; the real one does.
+  assert.equal(d.runId, "4821");
+  assert.equal(d.updatedAt, "2026-08-05T09:04:00Z");
+});
+
+test("a live deployment is not marked superseded", () => {
+  const d = describeDeployment(REPO_URL, DEPLOYMENT, [{ state: "success" }]);
+  assert.equal(d.superseded, false);
+  assert.equal(d.bucket, "ok");
+});
+
+test("a deployment deactivated with no prior outcome still reads inactive", () => {
+  const d = describeDeployment(REPO_URL, DEPLOYMENT, [{ state: "inactive" }]);
+  assert.equal(d.state, "inactive");
+  assert.equal(d.bucket, "idle");
+  assert.equal(d.superseded, false);
+});
+
 test("a deployment with no status yet counts as in progress", () => {
   const d = describeDeployment(REPO_URL, DEPLOYMENT, undefined);
   assert.equal(d.state, "in_progress");
@@ -313,6 +346,35 @@ test("jobBucket treats an unfinished job as running", () => {
   // action_required means a human has to step in, so it reads as in flight.
   assert.equal(jobBucket({ status: "completed", conclusion: "action_required" }), "busy");
   assert.equal(jobBucket({ status: "completed", conclusion: "something_new" }), "idle");
+});
+
+test("a job's tooltip JSON carries the concepts it is meant to teach", () => {
+  const job = describeJob({
+    id: 99,
+    name: "deploy",
+    workflow_name: "Deploy",
+    run_id: 4821,
+    status: "completed",
+    conclusion: "success",
+    steps: [{ name: "checkout", status: "completed", conclusion: "success" }],
+  });
+  const parsed = JSON.parse(job.rawJson);
+  assert.equal(parsed.job.workflow_name, "Deploy");
+  assert.equal(parsed.job.run_id, 4821);
+  // status and conclusion are the pair people mix up, so both must survive.
+  assert.equal(parsed.job.status, "completed");
+  assert.equal(parsed.job.conclusion, "success");
+  assert.equal(parsed.job.steps[0].name, "checkout");
+});
+
+test("a deployment's tooltip JSON separates intent from outcome", () => {
+  const d = describeDeployment(REPO_URL, DEPLOYMENT, [{ state: "success", log_url: "u" }]);
+  const parsed = JSON.parse(d.rawJson);
+  assert.equal(parsed.deployment.environment, "production");
+  assert.equal(parsed.deployment.sha, "abc1234def5678");
+  assert.equal(parsed.statuses[0].state, "success");
+  // Empty fields are dropped rather than printed as nulls.
+  assert.ok(!("task" in parsed.deployment));
 });
 
 test("describeJob normalises the fields the row needs", () => {
