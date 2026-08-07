@@ -120,10 +120,17 @@ failed, then the last job in the run. Where none can be resolved the row falls
 back to the run as a whole.
 
 The run is found from the deployment status's `log_url`, which is where the
-`deployments` API puts it. Some tooling instead puts the deployed site in
-`target_url`; when no run can be read from either, the extension falls back to
-searching workflow runs for the deployed commit, preferring one whose name
-mentions the environment.
+`deployments` API puts it when something sets it. Plenty of setups set no URL
+at all, or put the deployed site in `target_url`; in that case the run is found
+by searching workflow runs for the deployed commit, preferring one whose name
+mentions the environment. That search runs once per distinct commit, not once
+per deployment.
+
+If a deployment resolves to no run — nothing in Actions ever deployed that
+commit — its ↗ falls back to the deployment log, then to the commit itself.
+Seeing *"Open the deployed commit"* on every row means no runs were matched at
+all, which is expected when the deployments come from something other than
+GitHub Actions.
 
 **This section needs a token.** There is no dependable way to read a run's jobs
 out of the rendered page, so in session-only mode the jobs list is replaced by
@@ -191,8 +198,9 @@ src/
   registries are left unlinked rather than guessed at.
 - The REST path costs 1 + 2N requests per repo (N = environments) for the
   dashboard. Expanding an environment adds 1 + 10 for history, 1–2 for the jobs
-  list, and one per distinct run among the past deployments to resolve their
-  job links. The cache keeps this in check, and a missing job link degrades to
-  the run rather than failing the history.
+  list, and — to resolve the past deployments' job links — one per distinct
+  commit whose status named no run, plus one per distinct run found. The cache
+  keeps this in check, and a failed lookup degrades to a wider link rather than
+  failing the history.
 - Jobs are shown for the *current* deployment of an environment. Past
   deployments link to their run rather than listing its jobs inline.

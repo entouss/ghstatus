@@ -1,7 +1,7 @@
 // Picks an auth path per repo, rolls environments up to a repo status, caches
 // results, and keeps the popup from hammering GitHub with a burst of requests.
 
-import { parseRepo } from "./config.js";
+import { parseRepo, webBase } from "./config.js";
 import * as actions from "./github-actions.js";
 import * as api from "./github-api.js";
 import * as html from "./github-html.js";
@@ -118,12 +118,18 @@ export async function loadHistory(config, result, environment, { signal } = {}) 
 }
 
 /**
- * Point each past deployment at the job that deployed it. Runs are looked up
- * once each, since consecutive deployments often share one, and a failure here
- * is not worth failing the history over — those rows fall back to the run.
+ * Point each past deployment at the job that deployed it.
+ *
+ * Only some deployment statuses name their run in log_url; plenty carry no URL
+ * at all, so those have to be found by the commit they deployed before their
+ * jobs can be read. Both lookups are deduplicated and bounded, and a failure in
+ * either is not worth failing the history over — the row just falls back to a
+ * wider link.
  */
 async function attachJobLinks(config, result, deployments, { signal }) {
   if (!config.token) return;
+
+  await findMissingRuns(config, result, deployments, { signal });
 
   const runIds = [...new Set(deployments.map((d) => d.runId).filter(Boolean))];
   if (!runIds.length) return;
@@ -140,6 +146,36 @@ async function attachJobLinks(config, result, deployments, { signal }) {
   for (const deployment of deployments) {
     const jobs = jobsByRun.get(deployment.runId);
     if (jobs) deployment.jobUrl = actions.pickDeployJob(jobs, deployment)?.url || null;
+  }
+}
+
+/** Fill in runId/runUrl for deployments whose status never named a run. */
+async function findMissingRuns(config, result, deployments, { signal }) {
+  // One lookup per commit, not per deployment: redeploys of the same commit
+  // are common and they resolve to the same run.
+  const bySha = new Map();
+  for (const d of deployments) {
+    if (!d.runId && d.sha && !bySha.has(d.sha)) bySha.set(d.sha, d);
+  }
+  if (!bySha.size) return;
+
+  const runIdBySha = new Map();
+  await mapLimit([...bySha.values()], CONCURRENCY, async (deployment) => {
+    try {
+      const runId = await actions.findRunId(config, result.owner, result.repo, deployment, { signal });
+      if (runId) runIdBySha.set(deployment.sha, runId);
+    } catch (err) {
+      if (err?.name === "AbortError") throw err;
+    }
+  });
+
+  const base = `${webBase(config)}/${result.owner}/${result.repo}`;
+  for (const deployment of deployments) {
+    if (deployment.runId) continue;
+    const runId = runIdBySha.get(deployment.sha);
+    if (!runId) continue;
+    deployment.runId = runId;
+    deployment.runUrl = `${base}/actions/runs/${runId}`;
   }
 }
 
