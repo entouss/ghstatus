@@ -357,9 +357,13 @@ function renderHistory(deployments) {
   }
 
   const list = el("ul", { class: "row-list" });
+  list.append(historyHeader());
+
   for (const d of past) {
     const item = el("li", { class: "row history-row", title: stateTooltip(d) });
-    const label = deploymentSubtitle(d, { hasShaColumn: true }) || stateLabel(d.state);
+    // No state fallback here: the dot already says that, and printing
+    // "Success" under a Version heading is just wrong.
+    const label = deploymentSubtitle(d, { hasShaColumn: true }) || "";
     item.append(
       el("span", { class: "dot" }, EMOJI[d.bucket]),
       el("span", { class: "tag" }, label),
@@ -381,9 +385,31 @@ function renderHistory(deployments) {
   return wrap;
 }
 
+/** Column headings, so each value is identifiable without clicking through. */
+function historyHeader() {
+  const head = el("li", { class: "row history-row head" });
+  head.append(
+    el("span", { class: "dot" }),
+    el("span", { class: "tag" }, "Version"),
+    el("span", { class: "grow" }),
+    el("span", { class: "branch" }, "Branch"),
+    el("span", { class: "sha" }, "Commit"),
+    el("span", { class: "meta" }, "Deployed"),
+    el("span", { class: "open" })
+  );
+  return head;
+}
+
+/**
+ * Where a past deployment row points. The job that deployed is the most
+ * specific answer; each fallback is a wider view of the same event, so a row
+ * is only ever unlinked when GitHub gave us nothing at all.
+ */
 function jobLink(d) {
   if (d.jobUrl) return openLink(d.jobUrl, "Open the Actions job that deployed this");
   if (d.runUrl) return openLink(d.runUrl, "Open the Actions run");
+  if (d.logUrl) return openLink(d.logUrl, "Open the deployment log");
+  if (d.shaUrl) return openLink(d.shaUrl, "Open the deployed commit");
   return el("span", { class: "open" });
 }
 

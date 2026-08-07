@@ -96,7 +96,14 @@ a:hover { text-decoration: underline; }
 
 .grow { flex: 1 1 auto; min-width: 4px; }
 
-.dot { flex: none; font-size: 11px; line-height: 1; }
+/* Fixed width, not glyph width, so an empty cell still holds the column. */
+.dot {
+  flex: none;
+  width: 14px;
+  font-size: 11px;
+  line-height: 1;
+  text-align: center;
+}
 
 .meta {
   flex: none;
@@ -119,14 +126,19 @@ summary { list-style: none; cursor: pointer; }
 summary::-webkit-details-marker { display: none; }
 summary:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 
+/* On header rows the arrow is an affordance that appears on hover. Inside a
+   list it is a column of its own and has to be visible to be found. */
 .open {
   flex: none;
+  width: 16px;
+  text-align: center;
   opacity: 0;
   color: var(--muted);
-  padding: 0 2px;
 }
 .row:hover .open { opacity: 1; }
 .open:hover { color: var(--accent); text-decoration: none; }
+
+.row-list .open { opacity: 1; }
 
 .tag {
   flex: none;
@@ -242,6 +254,24 @@ summary:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; 
 .history-row:hover,
 .job-row:hover { background: var(--surface-2); }
 .history-row .tag { background: none; border: none; padding: 0; }
+
+.history-row.head {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  background: var(--surface-2);
+}
+.history-row.head:hover { background: var(--surface-2); }
+.history-row.head .tag,
+.history-row.head .branch,
+.history-row.head .sha,
+.history-row.head .meta {
+  font-family: inherit;
+  font-size: 10px;
+  color: var(--muted);
+}
 
 .job-name {
   flex: 0 1 auto;
