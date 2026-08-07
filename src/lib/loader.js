@@ -153,6 +153,7 @@ async function attachJobLinks(config, result, deployments, { signal }) {
       actions.pickDeployJob(jobs, deployment);
     deployment.jobUrl = job?.url || deployment.jobUrl || null;
     deployment.jobName = job?.name || null;
+    deployment.workflowName = job?.workflowName || deployment.workflowName || null;
   }
 }
 
@@ -166,11 +167,11 @@ async function findMissingRuns(config, result, deployments, { signal }) {
   }
   if (!bySha.size) return;
 
-  const runIdBySha = new Map();
+  const runBySha = new Map();
   await mapLimit([...bySha.values()], CONCURRENCY, async (deployment) => {
     try {
-      const runId = await actions.findRunId(config, result.owner, result.repo, deployment, { signal });
-      if (runId) runIdBySha.set(deployment.sha, runId);
+      const run = await actions.findRun(config, result.owner, result.repo, deployment, { signal });
+      if (run) runBySha.set(deployment.sha, run);
     } catch (err) {
       if (err?.name === "AbortError") throw err;
     }
@@ -179,10 +180,11 @@ async function findMissingRuns(config, result, deployments, { signal }) {
   const base = `${webBase(config)}/${result.owner}/${result.repo}`;
   for (const deployment of deployments) {
     if (deployment.runId) continue;
-    const runId = runIdBySha.get(deployment.sha);
-    if (!runId) continue;
-    deployment.runId = runId;
-    deployment.runUrl = `${base}/actions/runs/${runId}`;
+    const run = runBySha.get(deployment.sha);
+    if (!run) continue;
+    deployment.runId = run.id;
+    deployment.runUrl = `${base}/actions/runs/${run.id}`;
+    deployment.workflowName = run.workflowName;
   }
 }
 

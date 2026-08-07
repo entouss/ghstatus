@@ -155,18 +155,10 @@ test("deploymentSubtitle prefers the most specific identifier", () => {
   assert.equal(deploymentSubtitle({}), null);
 });
 
-test("deploymentSubtitle does not repeat what another column shows", () => {
-  // A tag deploy has version === ref, and the branch column already shows it.
-  assert.equal(deploymentSubtitle({ version: "v2.3.1", ref: "v2.3.1" }), null);
-  // History rows carry their own sha column, so the sha is not a fallback there.
-  assert.equal(
-    deploymentSubtitle({ sha: "abcdef1234" }, { hasShaColumn: true }),
-    null
-  );
-  assert.equal(
-    deploymentSubtitle({ version: "1.2", sha: "abcdef1234" }, { hasShaColumn: true }),
-    "1.2"
-  );
+test("deploymentSubtitle shows a tag version even though it is also the ref", () => {
+  // Nothing else displays the ref any more, so there is nothing to dedupe
+  // against — suppressing this would lose the only thing identifying the row.
+  assert.equal(deploymentSubtitle({ version: "v2.3.1", ref: "v2.3.1" }), "v2.3.1");
 });
 
 // --- outbound links --------------------------------------------------------

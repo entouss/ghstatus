@@ -33,6 +33,7 @@ import { shortSha } from "./util.js";
  * @property {string|null} runUrl
  * @property {string|null} jobUrl      the job within that run that deployed
  * @property {string|null} jobName     that job's name
+ * @property {string|null} workflowName the workflow the run belongs to
  */
 
 export function emptyDeployment(overrides = {}) {
@@ -62,6 +63,7 @@ export function emptyDeployment(overrides = {}) {
     runUrl: null,
     jobUrl: null,
     jobName: null,
+    workflowName: null,
     ...overrides,
   };
 }
@@ -264,17 +266,7 @@ function versionFromRef(ref) {
   return /^v?\d+[\w.+-]*$/.test(ref) ? ref : null;
 }
 
-/**
- * One-line summary of what shipped, for the left of a collapsed row. The
- * branch and commit have columns of their own, so whatever is already shown
- * there is not repeated here.
- * @param {{hasShaColumn?: boolean}} columns which columns the row already has
- */
-export function deploymentSubtitle(deployment, { hasShaColumn = false } = {}) {
-  const label =
-    deployment.version ||
-    deployment.image ||
-    (hasShaColumn ? null : shortSha(deployment.sha)) ||
-    null;
-  return label && label !== deployment.ref ? label : null;
+/** One-line summary of what shipped, for the left of a collapsed row. */
+export function deploymentSubtitle(deployment) {
+  return deployment.version || deployment.image || shortSha(deployment.sha) || null;
 }

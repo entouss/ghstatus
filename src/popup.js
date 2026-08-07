@@ -169,7 +169,6 @@ function renderEnv(result, env) {
     el("span", { class: "env-name" }, env.name),
     subtitle ? el("span", { class: "tag" }, subtitle) : "",
     el("span", { class: "grow" }),
-    branchCell(latest),
     el("span", { class: "meta" }, envMeta(latest)),
     openLink(
       environmentUrl(config, result.owner, result.repo, env.name),
@@ -219,7 +218,6 @@ function renderFacts(d) {
   addFact(dl, "Updated", d.updatedAt ? absolute(d.updatedAt) : null);
   addFact(dl, "Triggered by", d.actor ? maybeLink(d.actorUrl, `@${d.actor}`) : null);
   addFact(dl, "Commit", d.sha ? maybeLink(d.shaUrl, shortSha(d.sha), "mono") : null);
-  addFact(dl, refLabel(d), d.ref ? maybeLink(d.refUrl, d.ref, "mono") : null);
   addFact(dl, "Version", d.version ? maybeLink(d.versionUrl, d.version, "mono") : null);
   // These three run long, so they take a row to themselves.
   addFact(dl, "Image", d.image ? maybeLink(d.imageUrl, d.image, "mono wrap") : null, true);
@@ -232,11 +230,6 @@ function renderFacts(d) {
     addFact(dl, "Links", el("span", { class: "links" }, ...interleave(links, " · ")), true);
   }
   return dl;
-}
-
-/** Name the ref for what it is, so "main" and "v2.3.1" aren't both "Ref". */
-function refLabel(d) {
-  return { tag: "Tag", commit: "Ref commit" }[d.refKind] || "Branch";
 }
 
 function statusValue(d) {
@@ -360,22 +353,22 @@ function renderHistory(deployments) {
   list.append(historyHeader());
 
   for (const d of past) {
-    const item = el("li", { class: "row history-row", title: stateTooltip(d) });
-    // No state fallback here: the dot already says that, and printing
-    // "Success" under a Version heading is just wrong.
-    const label = deploymentSubtitle(d, { hasShaColumn: true }) || "";
+    const item = el("li", { class: "history-row", title: stateTooltip(d) });
     item.append(
-      el("span", { class: "dot" }, EMOJI[d.bucket]),
-      el("span", { class: "tag" }, label),
-      el("span", { class: "grow" }),
-      el("span", { class: "job", title: d.jobName || "" }, d.jobName || ""),
-      branchCell(d),
-      d.sha ? link(d.shaUrl, shortSha(d.sha), "sha mono") : el("span", { class: "sha mono" }, "—"),
-      el("span", { class: "meta" }, envMeta(d)),
-      // Straight to the job that deployed, falling back to the whole run when
-      // we could not resolve one.
-      jobLink(d)
+      el("div", { class: "row" },
+        el("span", { class: "dot" }, EMOJI[d.bucket]),
+        el("span", { class: "workflow" }, d.workflowName || ""),
+        el("span", { class: "grow" }),
+        d.sha ? link(d.shaUrl, shortSha(d.sha), "sha mono") : el("span", { class: "sha mono" }, "—"),
+        el("span", { class: "meta" }, envMeta(d)),
+        // Straight to the job that deployed, falling back to the whole run when
+        // we could not resolve one.
+        jobLink(d)
+      )
     );
+    // The job goes on its own line: names like "deploy / terraform apply" need
+    // more room than a column can give them.
+    if (d.jobName) item.append(el("div", { class: "job" }, d.jobName));
     list.append(item);
   }
   wrap.append(list);
@@ -388,16 +381,16 @@ function renderHistory(deployments) {
 
 /** Column headings, so each value is identifiable without clicking through. */
 function historyHeader() {
-  const head = el("li", { class: "row history-row head" });
+  const head = el("li", { class: "history-row head" });
   head.append(
-    el("span", { class: "dot" }),
-    el("span", { class: "tag" }, "Version"),
-    el("span", { class: "grow" }),
-    el("span", { class: "job" }, "Job"),
-    el("span", { class: "branch" }, "Branch"),
-    el("span", { class: "sha" }, "Commit"),
-    el("span", { class: "meta" }, "Deployed"),
-    el("span", { class: "open" })
+    el("div", { class: "row" },
+      el("span", { class: "dot" }),
+      el("span", { class: "workflow" }, "Workflow"),
+      el("span", { class: "grow" }),
+      el("span", { class: "sha" }, "Commit"),
+      el("span", { class: "meta" }, "Deployed"),
+      el("span", { class: "open" })
+    )
   );
   return head;
 }
@@ -430,16 +423,6 @@ function repoUrl(result) {
 
 function chevron() {
   return el("span", { class: "chev", "aria-hidden": "true" }, "›");
-}
-
-/** Rendered even when empty, so the column stays put down the list. */
-function branchCell(d) {
-  const cell = el("span", { class: "branch" });
-  if (d?.ref) {
-    cell.title = `${refLabel(d)}: ${d.ref}`;
-    cell.append(maybeLink(d.refUrl, d.ref, "mono"));
-  }
-  return cell;
 }
 
 function absolute(value) {

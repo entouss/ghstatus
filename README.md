@@ -13,11 +13,11 @@ history:
 
 ```
 ▾ 🟥 my-org/api                                    3 envs · 12m ago
-    › 🟩 production  v2.3.1              v2.3.1     2h ago · @alice
-    ▾ 🟥 staging     ghcr.io/…:2.4.0-rc1 release/2.4  12m ago · @bob
+    › 🟩 production  v2.3.1                         2h ago · @alice
+    ▾ 🟥 staging     ghcr.io/…:2.4.0-rc1           12m ago · @bob
           Status        🟥 Failure          Updated  12m ago
           Triggered by  @bob                Commit   abc1234
-          Branch        release/2.4         Version  2.4.0-rc1
+          Version       2.4.0-rc1
           Image         ghcr.io/my-org/api:2.4.0-rc1
           Description   Automatic deployment from workflow "Deploy" #4821
           Links         View logs · Open environment
@@ -28,9 +28,11 @@ history:
           🟥 deploy (staging) / terraform apply               1m 20s
 
           PAST DEPLOYMENTS
-             VERSION      JOB              BRANCH   COMMIT    DEPLOYED
-          🟩 v2.3.1       deploy (prod)    main     9f2e10c   2d ago · @alice ↗
-          🟩 v2.3.0       deploy (prod)    hotfix   41ab7c3   6d ago · @alice ↗
+             WORKFLOW                        COMMIT    DEPLOYED
+          🟩 Deploy                          9f2e10c   2d ago · @alice ↗
+               deploy (production) / terraform apply
+          🟩 Release and deploy              41ab7c3   6d ago · @alice ↗
+               deploy / terraform apply to staging
     › ⬜ preview                                  no deployments
 ```
 
@@ -103,9 +105,6 @@ fallback; with no token, only the session is used.
   **Refresh** re-fetches everything and drops the history cache too.
 - Repos are fetched 4 at a time, environments within a repo likewise.
 - Failures are reported per repo, so one bad repo doesn't blank the dashboard.
-- The deployed **branch** gets its own column on every row, next to the commit,
-  and is labelled *Branch*, *Tag* or *Ref commit* in the detail panel according
-  to what the ref actually is.
 
 ### Getting to the Actions jobs
 
@@ -149,7 +148,6 @@ Almost everything on screen is a link back to where it came from:
 | Status | the run that produced it (`log_url`/`target_url`) |
 | Triggered by | the GitHub profile |
 | Commit | `/commit/<sha>` |
-| Branch / Tag | `/tree/<ref>` |
 | Version | `/releases/tag/<v>`, only when the version *is* the deployed tag |
 | Image | the package page — `ghcr.io` under this repo, or Docker Hub |
 | ↗ on a repo | `/deployments` |
@@ -161,11 +159,11 @@ text rather than pointed somewhere that might 404.
 
 ### Reading the columns
 
-**Branch** is the deployment's `ref`, exactly as GitHub recorded it. If every
-row says `main`, that is because the workflow that created the deployment ran
-on `main` — which is normal when a release pipeline deploys an artifact built
-elsewhere. In that setup the branch is not what identifies a deployment;
-**Version** and **Image** are.
+**Workflow** is the Actions workflow that produced the deployment, with the
+specific **job** on the line below it — job names like
+`deploy / terraform apply to staging` need more room than a column affords.
+Both come from the jobs already fetched to build the row's link, so neither
+costs an extra request.
 
 **Version** and **Image** come from the deployment payload, which is free-form.
 The whole payload is searched, shallowest key first, for the conventional

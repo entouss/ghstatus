@@ -41,6 +41,9 @@ export function describeJob(job) {
   return {
     id: job.id,
     name: job.name,
+    // The jobs endpoint names the workflow, so we get it without fetching the
+    // run itself.
+    workflowName: job.workflow_name || null,
     status: job.status,
     conclusion: job.conclusion || null,
     bucket: jobBucket(job),
@@ -106,7 +109,7 @@ export function pickDeployJob(jobs, deployment = {}) {
  * Last resort: find the run by the commit that was deployed. Several runs can
  * share a commit, so prefer one that actually targeted this environment.
  */
-export async function findRunId(config, owner, repo, deployment, { signal } = {}) {
+export async function findRun(config, owner, repo, deployment, { signal } = {}) {
   if (!deployment.sha) return null;
 
   const query = new URLSearchParams({ head_sha: deployment.sha, per_page: "20" });
@@ -121,5 +124,10 @@ export async function findRunId(config, owner, repo, deployment, { signal } = {}
         `${r.name || ""} ${r.display_title || ""}`.toLowerCase().includes(environment.toLowerCase())
       )) ||
     runs[0];
-  return String(match.id);
+  return { id: String(match.id), workflowName: match.name || null };
+}
+
+export async function findRunId(config, owner, repo, deployment, { signal } = {}) {
+  const run = await findRun(config, owner, repo, deployment, { signal });
+  return run?.id || null;
 }
