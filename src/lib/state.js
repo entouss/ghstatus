@@ -54,10 +54,15 @@ const PHRASE_STATE = [
   ["deployed", "success"],
 ];
 
-// When a card mentions several states at once, the most "urgent" one is the
-// one worth surfacing: something running now beats a stale failure, which in
-// turn beats an older success.
-const BUCKET_PRIORITY = { busy: 3, bad: 2, ok: 1, idle: 0 };
+// Two different orderings, for two different questions.
+//
+// CARD_PRIORITY answers "one card mentions several states, which is current?"
+// — a run happening now supersedes the outcome printed beside it.
+const CARD_PRIORITY = { busy: 3, bad: 2, ok: 1, idle: 0 };
+
+// SEVERITY answers "several environments, how bad is this repo?" — here a
+// broken production outranks a deploy that happens to be running elsewhere.
+export const SEVERITY = { bad: 3, busy: 2, ok: 1, idle: 0 };
 
 /**
  * @param {string|null|undefined} state
@@ -70,6 +75,19 @@ export function bucketOf(state) {
 }
 
 /**
+ * Roll several environment buckets up into the one worth showing on the repo.
+ * @param {Bucket[]} buckets
+ * @returns {Bucket}
+ */
+export function mostSevere(buckets) {
+  let worst = "idle";
+  for (const bucket of buckets) {
+    if (SEVERITY[bucket] > SEVERITY[worst]) worst = bucket;
+  }
+  return worst;
+}
+
+/**
  * Pull a deployment state out of free-form card text.
  * @param {string} text
  * @returns {string|null} canonical state, or null if nothing recognisable
@@ -79,7 +97,7 @@ export function stateFromText(text) {
   let best = null;
   for (const [phrase, state] of PHRASE_STATE) {
     if (!hay.includes(phrase)) continue;
-    if (!best || BUCKET_PRIORITY[bucketOf(state)] > BUCKET_PRIORITY[bucketOf(best)]) {
+    if (!best || CARD_PRIORITY[bucketOf(state)] > CARD_PRIORITY[bucketOf(best)]) {
       best = state;
     }
   }

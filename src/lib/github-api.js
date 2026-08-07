@@ -1,8 +1,11 @@
-// PAT path: the REST API gives us environments and deployment states as real
+// PAT path: the REST API gives us environments, deployments and states as real
 // data, so this is the accurate source whenever a token is available.
 
-import { apiBase } from "./config.js";
-import { bucketOf } from "./state.js";
+import { apiBase, webBase } from "./config.js";
+import { describeDeployment } from "./deployment.js";
+import { mapLimit } from "./util.js";
+
+const FANOUT = 4;
 
 class ApiError extends Error {
   constructor(message, status) {
@@ -28,53 +31,40 @@ async function api(config, path, { signal } = {}) {
 }
 
 /**
- * Latest deployment state for every environment of one repo.
- * @returns {Promise<Array<{name: string, state: string|null, bucket: string,
- *   updatedAt: string|null, url: string|null}>>}
+ * Every environment of a repo with its current deployment.
+ * @returns {Promise<Array<{name: string, latest: import("./deployment.js").Deployment|null}>>}
  */
 export async function fetchRepoEnvironments(config, owner, repo, { signal } = {}) {
   const envs = await api(config, `/repos/${owner}/${repo}/environments?per_page=100`, { signal });
   const names = (envs.environments || []).map((e) => e.name);
 
-  return Promise.all(
-    names.map(async (name) => {
-      const status = await latestStatus(config, owner, repo, name, { signal });
-      return {
-        name,
-        state: status?.state ?? null,
-        bucket: bucketOf(status?.state),
-        updatedAt: status?.updatedAt ?? null,
-        url: status?.url ?? null,
-      };
-    })
-  );
+  return mapLimit(names, FANOUT, async (name) => {
+    const [latest = null] = await fetchDeployments(config, owner, repo, name, 1, { signal });
+    return { name, latest };
+  });
 }
 
-async function latestStatus(config, owner, repo, environment, { signal }) {
-  const q = new URLSearchParams({ environment, per_page: "1" });
+/**
+ * Deployment history for one environment, newest first.
+ * @returns {Promise<import("./deployment.js").Deployment[]>}
+ */
+export async function fetchDeployments(config, owner, repo, environment, limit, { signal } = {}) {
+  const query = new URLSearchParams({ environment, per_page: String(limit) });
   const deployments = await api(
     config,
-    `/repos/${owner}/${repo}/deployments?${q}`,
+    `/repos/${owner}/${repo}/deployments?${query}`,
     { signal }
   );
-  const deployment = deployments[0];
-  if (!deployment) return null;
+  const repoUrl = `${webBase(config)}/${owner}/${repo}`;
 
-  const statuses = await api(
-    config,
-    `/repos/${owner}/${repo}/deployments/${deployment.id}/statuses?per_page=1`,
-    { signal }
-  );
-  const status = statuses[0];
-  if (!status) {
-    // A deployment with no status yet is still pending work.
-    return { state: "pending", updatedAt: deployment.created_at, url: null };
-  }
-  return {
-    state: status.state,
-    updatedAt: status.updated_at || status.created_at,
-    url: status.target_url || status.environment_url || null,
-  };
+  return mapLimit(deployments, FANOUT, async (deployment) => {
+    const statuses = await api(
+      config,
+      `/repos/${owner}/${repo}/deployments/${deployment.id}/statuses?per_page=1`,
+      { signal }
+    );
+    return describeDeployment(repoUrl, deployment, statuses[0]);
+  });
 }
 
 /** Cheap probe so the UI can tell "bad token" from "repo missing". */
