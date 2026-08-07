@@ -32,6 +32,7 @@ import { shortSha } from "./util.js";
  * @property {string|null} runId       Actions run that performed it, if known
  * @property {string|null} runUrl
  * @property {string|null} jobUrl      the job within that run that deployed
+ * @property {string|null} jobName     that job's name
  */
 
 export function emptyDeployment(overrides = {}) {
@@ -60,6 +61,7 @@ export function emptyDeployment(overrides = {}) {
     runId: null,
     runUrl: null,
     jobUrl: null,
+    jobName: null,
     ...overrides,
   };
 }
@@ -176,12 +178,38 @@ export function imageUrl(repoUrl, image) {
   return null;
 }
 
-const IMAGE_KEYS = ["image", "image_tag", "imageTag", "docker_image", "dockerImage", "container_image", "artifact"];
-const VERSION_KEYS = ["version", "app_version", "appVersion", "tag", "release", "build", "build_number"];
+const IMAGE_KEYS = [
+  "image",
+  "image_tag",
+  "imageTag",
+  "image_name",
+  "imageName",
+  "docker_image",
+  "dockerImage",
+  "container_image",
+  "containerImage",
+  "container",
+  "artifact",
+];
+const VERSION_KEYS = [
+  "version",
+  "app_version",
+  "appVersion",
+  "chart_version",
+  "chartVersion",
+  "release_version",
+  "releaseVersion",
+  "tag",
+  "release",
+  "build",
+  "build_number",
+  "buildNumber",
+];
 
 /**
  * Deployment payloads are free-form — a JSON object, a JSON string, or a bare
- * string. Dig one level deep for the fields people conventionally put there.
+ * string — and teams nest them however they like. Search the whole structure
+ * for the keys people conventionally use, shallowest match first.
  */
 export function readPayload(raw) {
   let payload = raw;
@@ -196,15 +224,27 @@ export function readPayload(raw) {
     return { image: null, version: null };
   }
 
-  const nested = Object.values(payload).filter(
-    (v) => v && typeof v === "object" && !Array.isArray(v)
-  );
-  const sources = [payload, ...nested];
-
+  const sources = objectsWithin(payload);
   return {
     image: pick(sources, IMAGE_KEYS),
     version: pick(sources, VERSION_KEYS),
   };
+}
+
+/** Every object inside `root`, breadth-first so shallower keys win. */
+function objectsWithin(root, maxDepth = 4) {
+  const found = [];
+  const seen = new Set();
+  const queue = [[root, 0]];
+
+  while (queue.length) {
+    const [node, depth] = queue.shift();
+    if (!node || typeof node !== "object" || seen.has(node) || depth > maxDepth) continue;
+    seen.add(node);
+    if (!Array.isArray(node)) found.push(node);
+    for (const value of Object.values(node)) queue.push([value, depth + 1]);
+  }
+  return found;
 }
 
 function pick(sources, keys) {

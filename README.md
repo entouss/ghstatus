@@ -28,8 +28,9 @@ history:
           🟥 deploy (staging) / terraform apply               1m 20s
 
           PAST DEPLOYMENTS
-          🟩 v2.3.1                    main    9f2e10c   2d ago · @alice ↗
-          🟩 v2.3.0            hotfix/cache    41ab7c3   6d ago · @alice ↗
+             VERSION      JOB              BRANCH   COMMIT    DEPLOYED
+          🟩 v2.3.1       deploy (prod)    main     9f2e10c   2d ago · @alice ↗
+          🟩 v2.3.0       deploy (prod)    hotfix   41ab7c3   6d ago · @alice ↗
     › ⬜ preview                                  no deployments
 ```
 
@@ -157,6 +158,25 @@ Almost everything on screen is a link back to where it came from:
 
 Where a link can't be derived with confidence the value is shown as plain
 text rather than pointed somewhere that might 404.
+
+### Reading the columns
+
+**Branch** is the deployment's `ref`, exactly as GitHub recorded it. If every
+row says `main`, that is because the workflow that created the deployment ran
+on `main` — which is normal when a release pipeline deploys an artifact built
+elsewhere. In that setup the branch is not what identifies a deployment;
+**Version** and **Image** are.
+
+**Version** and **Image** come from the deployment payload, which is free-form.
+The whole payload is searched, shallowest key first, for the conventional
+spellings (`version`, `app_version`, `tag`, `image`, `container_image`, …). If
+your tooling uses different key names, these columns stay empty — tell me the
+names and they can be added.
+
+**Dates** are shown relative ("2d ago"), with the absolute timestamp on hover
+formatted with the month spelled out. A numeric `7/8/2026` reads as two
+different days depending on locale, and the wrong reading looks like the data
+is a month out.
 
 ## GitHub Enterprise Server
 

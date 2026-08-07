@@ -113,11 +113,18 @@ test("a deployment with no status yet counts as in progress", () => {
   assert.equal(d.updatedAt, "2026-08-05T09:00:00Z");
 });
 
-test("readPayload digs one level for image and version", () => {
+test("readPayload finds image and version however they are nested", () => {
   assert.deepEqual(readPayload({ image: "app:1", nested: { version: "1.0" } }), {
     image: "app:1",
     version: "1.0",
   });
+  // Teams nest deeply; a two-level payload must still be readable.
+  assert.deepEqual(
+    readPayload({ spec: { template: { containerImage: "app:3", appVersion: "3.0" } } }),
+    { image: "app:3", version: "3.0" }
+  );
+  // A shallower key wins over a deeper one.
+  assert.equal(readPayload({ version: "top", deep: { version: "nested" } }).version, "top");
   // Payloads arrive as JSON strings just as often as objects.
   assert.deepEqual(readPayload('{"docker_image":"app:2","tag":"2.0"}'), {
     image: "app:2",

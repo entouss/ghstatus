@@ -34,6 +34,18 @@ export function timeAgo(value) {
   return "just now";
 }
 
+/**
+ * An absolute timestamp, with the month spelled out. A bare toLocaleString()
+ * gives "7/8/2026", which is July 8th or 8th July depending on who is reading
+ * it — and the wrong reading makes the data look a month out.
+ */
+export function formatDate(value) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return date.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
+}
+
 /** Elapsed time between two timestamps, as "45s" / "3m 12s" / "1h 04m". */
 export function duration(from, to) {
   if (!from || !to) return "";

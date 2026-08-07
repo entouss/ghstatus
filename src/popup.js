@@ -9,7 +9,7 @@ import {
 } from "./lib/loader.js";
 import { deploymentSubtitle } from "./lib/deployment.js";
 import { EMOJI, BUCKET_LABEL, stateLabel } from "./lib/state.js";
-import { timeAgo, duration, shortSha } from "./lib/util.js";
+import { timeAgo, duration, formatDate, shortSha } from "./lib/util.js";
 
 const reposEl = document.getElementById("repos");
 const emptyEl = document.getElementById("empty");
@@ -206,7 +206,7 @@ function stateTooltip(latest) {
   if (!latest) return "No deployments";
   const parts = [`${stateLabel(latest.state)} (${BUCKET_LABEL[latest.bucket]})`];
   if (latest.inferredState) parts.push("no status reported yet — assumed in progress");
-  if (latest.updatedAt) parts.push(new Date(latest.updatedAt).toLocaleString());
+  if (latest.updatedAt) parts.push(formatDate(latest.updatedAt));
   return parts.join("\n");
 }
 
@@ -368,6 +368,7 @@ function renderHistory(deployments) {
       el("span", { class: "dot" }, EMOJI[d.bucket]),
       el("span", { class: "tag" }, label),
       el("span", { class: "grow" }),
+      el("span", { class: "job", title: d.jobName || "" }, d.jobName || ""),
       branchCell(d),
       d.sha ? link(d.shaUrl, shortSha(d.sha), "sha mono") : el("span", { class: "sha mono" }, "—"),
       el("span", { class: "meta" }, envMeta(d)),
@@ -392,6 +393,7 @@ function historyHeader() {
     el("span", { class: "dot" }),
     el("span", { class: "tag" }, "Version"),
     el("span", { class: "grow" }),
+    el("span", { class: "job" }, "Job"),
     el("span", { class: "branch" }, "Branch"),
     el("span", { class: "sha" }, "Commit"),
     el("span", { class: "meta" }, "Deployed"),
@@ -441,7 +443,7 @@ function branchCell(d) {
 }
 
 function absolute(value) {
-  const node = el("span", { title: new Date(value).toLocaleString() }, timeAgo(value));
+  const node = el("span", { title: formatDate(value) }, timeAgo(value));
   return node;
 }
 

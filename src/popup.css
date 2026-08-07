@@ -265,6 +265,7 @@ summary:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; 
 }
 .history-row.head:hover { background: var(--surface-2); }
 .history-row.head .tag,
+.history-row.head .job,
 .history-row.head .branch,
 .history-row.head .sha,
 .history-row.head .meta {
@@ -283,9 +284,20 @@ summary:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; 
 /* Branch, commit and meta are fixed-width right-hand columns so they line up
    down the list. Fixed rather than content-sized: a long branch or actor name
    would otherwise shunt everything to its left out of alignment. */
+.job {
+  flex: none;
+  width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: right;
+  font-size: 12px;
+  color: var(--muted);
+}
+
 .branch {
   flex: none;
-  width: 150px;
+  width: 130px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -308,7 +320,7 @@ summary:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; 
 }
 
 .history-row .meta {
-  width: 220px; /* fixed, not min — content-sized would drift the sha column */
+  width: 190px; /* fixed, not min — content-sized would drift the sha column */
   overflow: hidden;
   text-overflow: ellipsis;
   text-align: right;

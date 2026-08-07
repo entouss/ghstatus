@@ -145,7 +145,14 @@ async function attachJobLinks(config, result, deployments, { signal }) {
 
   for (const deployment of deployments) {
     const jobs = jobsByRun.get(deployment.runId);
-    if (jobs) deployment.jobUrl = actions.pickDeployJob(jobs, deployment)?.url || null;
+    if (!jobs) continue;
+    // A job link already taken from "View logs" is the authoritative one — look
+    // it up by URL so we can name it, rather than re-picking a different job.
+    const job =
+      jobs.find((candidate) => candidate.url === deployment.jobUrl) ||
+      actions.pickDeployJob(jobs, deployment);
+    deployment.jobUrl = job?.url || deployment.jobUrl || null;
+    deployment.jobName = job?.name || null;
   }
 }
 
