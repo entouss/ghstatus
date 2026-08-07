@@ -334,7 +334,7 @@ async function fillHistory(box, result, envName) {
 
   try {
     const deployments = await loadHistory(config, result, envName, { signal: controller?.signal });
-    container.replaceChildren(renderHistory(deployments, result, envName));
+    container.replaceChildren(renderHistory(deployments));
     container.dataset.loaded = "yes";
   } catch (err) {
     if (err?.name === "AbortError") return;
@@ -344,14 +344,10 @@ async function fillHistory(box, result, envName) {
   }
 }
 
-function renderHistory(deployments, result, envName) {
+function renderHistory(deployments) {
   const wrap = el("div");
-  wrap.append(
-    el("div", { class: "section-head" },
-      el("span", {}, `Past deployments`),
-      openLink(activityUrl(result, envName), "Open activity log")
-    )
-  );
+  // No link on the heading itself — each row below carries its own.
+  wrap.append(el("div", { class: "section-head" }, el("span", {}, "Past deployments")));
 
   // The newest entry is already spelled out in the facts above.
   const past = deployments.slice(1);
@@ -396,10 +392,6 @@ function historyError(err, result) {
     return `Could not read the activity log (${err.message}). A token in options gives reliable history.`;
   }
   return err.message || "Could not load history";
-}
-
-function activityUrl(result, envName) {
-  return `${deploymentsUrl(config, result.owner, result.repo)}/activity_log?environments_filter=${encodeURIComponent(envName)}`;
 }
 
 function repoUrl(result) {

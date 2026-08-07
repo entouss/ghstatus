@@ -27,9 +27,9 @@ history:
           🟩 test (unit)                                      4m 03s
           🟥 deploy (staging) / terraform apply               1m 20s
 
-          PAST DEPLOYMENTS ↗
-          🟩 v2.3.1                    main    9f2e10c   2d ago · @alice
-          🟩 v2.3.0            hotfix/cache    41ab7c3   6d ago · @alice
+          PAST DEPLOYMENTS
+          🟩 v2.3.1                    main    9f2e10c   2d ago · @alice ↗
+          🟩 v2.3.0            hotfix/cache    41ab7c3   6d ago · @alice ↗
     › ⬜ preview                                  no deployments
 ```
 
@@ -141,7 +141,6 @@ Almost everything on screen is a link back to where it came from:
 | Image | the package page — `ghcr.io` under this repo, or Docker Hub |
 | ↗ on a repo | `/deployments` |
 | ↗ on an environment | `/deployments/<environment>` — its latest deployment |
-| ↗ on **Past deployments** | the environment's full activity log |
 | ↗ on a past deployment | `/actions/runs/<runId>/job/<jobId>` |
 
 Where a link can't be derived with confidence the value is shown as plain
@@ -184,8 +183,8 @@ src/
   says so and points at the token option. History in session mode is scraped
   from the environment's activity log and recovers less detail — no payload,
   so no image or version.
-- Only the latest 10 deployments per environment are listed; the ↗ beside
-  **Past deployments** opens the full activity log.
+- Only the latest 10 deployments per environment are listed. The environment's
+  own ↗ opens its GitHub page if you need the rest.
 - The image link assumes a `ghcr.io` package published from the repo it is
   shown under, which is the usual setup but not guaranteed — if yours is
   published elsewhere the link can 404. Nested `ghcr.io` paths and third-party
