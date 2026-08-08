@@ -16,7 +16,7 @@ history:
 
 ```
 ▾ 🟥 my-org/api                                    3 envs · 12m ago
-    › ACTIONS                                        4 workflows
+    › WORKFLOWS                                                4
     › 🟩 production  v2.3.1              2h ago · @alice   9f2e10c
          Deploy
     ▾ 🟥 staging     ghcr.io/…:2.4.0-rc1  12m ago · @bob    abc1234
@@ -155,7 +155,7 @@ fallback; with no token, only the session is used.
   environment: the repo's recent runs are fetched once and matched to each
   environment's deployment by commit, preferring a run that names the
   environment.
-- Each repo lists its **Actions** — every workflow with its latest run, what
+- Each repo lists its **workflows** — every one with its latest run, what
   triggered it and how it ended — above the environments, collapsed by
   default. This reuses the same recent-runs request, so it is free.
 - Failures are reported per repo, so one bad repo doesn't blank the dashboard.

@@ -183,8 +183,8 @@ function renderRepo(repo, result) {
   } else if (!envCount) {
     body.append(el("div", { class: "note" }, "No environments"));
   } else {
-    const actions = renderActions(result);
-    if (actions) body.append(actions);
+    const workflows = renderWorkflows(result);
+    if (workflows) body.append(workflows);
     for (const env of result.environments) body.append(renderEnv(result, env));
   }
   box.append(body);
@@ -223,30 +223,30 @@ function repoMeta(result, envCount) {
  * The repo's workflows, each with its latest run. Collapsed by default: this
  * is context for the deployments below it, not the thing you came to see.
  */
-function renderActions(result) {
+function renderWorkflows(result) {
   const workflows = result.workflows || [];
   if (!workflows.length) return null;
 
-  const key = `${result.key}#actions`;
-  const box = el("details", { class: "actions-list" });
+  const key = `${result.key}#workflows`;
+  const box = el("details", { class: "workflow-list" });
   if (isOpen(key)) box.open = true;
   box.addEventListener("toggle", () => setOpen(key, box.open));
 
   const summary = el("summary", { class: "row section-toggle" });
   summary.append(
     chevron(),
-    el("span", {}, "Actions"),
+    el("span", {}, "Workflows"),
     el("span", { class: "grow" }),
-    el("span", { class: "meta" }, `${workflows.length} workflow${workflows.length === 1 ? "" : "s"}`)
+    el("span", { class: "meta" }, String(workflows.length))
   );
   box.append(summary);
 
   const list = el("ul", { class: "row-list" });
   for (const run of workflows) {
-    const item = el("li", { class: "row action-row", title: runTooltip(run) });
+    const item = el("li", { class: "row workflow-row", title: runTooltip(run) });
     item.append(
       el("span", { class: "dot" }, EMOJI[run.bucket] || EMOJI.idle),
-      el("span", { class: "action-name" }, run.workflowName || "Unnamed workflow"),
+      el("span", { class: "workflow-name" }, run.workflowName || "Unnamed workflow"),
       el("span", { class: "grow" }),
       el("span", { class: "meta" }, [run.event, timeAgo(run.createdAt)].filter(Boolean).join(" · ")),
       run.url ? openLink(run.url, "Open this workflow's latest run") : el("span", { class: "open" })

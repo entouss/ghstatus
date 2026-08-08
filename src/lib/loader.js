@@ -75,7 +75,7 @@ async function loadRepo(config, owner, repo, { signal }) {
     try {
       const environments = await client(source).fetchRepoEnvironments(config, owner, repo, { signal });
       environments.sort((a, b) => a.name.localeCompare(b.name));
-      const workflows = await loadActions(config, owner, repo, environments, { signal });
+      const workflows = await loadWorkflows(config, owner, repo, environments, { signal });
       return {
         ...base,
         source,
@@ -109,7 +109,7 @@ async function loadRepo(config, owner, repo, { signal }) {
  * failure here must not cost us the deployments.
  * @returns {Promise<object[]>} one entry per workflow, most recent first
  */
-async function loadActions(config, owner, repo, environments, { signal }) {
+async function loadWorkflows(config, owner, repo, environments, { signal }) {
   if (!config.token) return [];
 
   let runs;
