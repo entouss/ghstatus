@@ -10,8 +10,12 @@
 
     <section>
       <label for="repos">Repositories</label>
-      <p class="hint">One per line, as <code>org/repo</code>. Full URLs work too.</p>
-      <textarea id="repos" rows="8" spellcheck="false" placeholder="my-org/api&#10;my-org/web"></textarea>
+      <p class="hint">
+        One per line, as <code>org/repo</code>. Full URLs work too. End a line
+        with a colon to start a group — repos listed above the first group stay
+        ungrouped.
+      </p>
+      <textarea id="repos" rows="12" spellcheck="false" placeholder="my-org/shared-tooling&#10;&#10;System 1:&#10;my-org/api&#10;my-org/web&#10;&#10;System 2:&#10;my-org/infra"></textarea>
     </section>
 
     <section>

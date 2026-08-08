@@ -1,7 +1,7 @@
 // Picks an auth path per repo, rolls environments up to a repo status, caches
 // results, and keeps the popup from hammering GitHub with a burst of requests.
 
-import { parseRepo, webBase } from "./config.js";
+import { flattenGroups, parseRepo, webBase } from "./config.js";
 import * as actions from "./github-actions.js";
 import * as api from "./github-api.js";
 import * as html from "./github-html.js";
@@ -27,8 +27,10 @@ export const HISTORY_LIMIT = 10;
  * @property {number} fetchedAt
  */
 
+/** Every configured repo, in the order the groups list them. */
 export function orderedRepos(config) {
-  return config.repos
+  const keys = config.groups?.length ? flattenGroups(config.groups) : config.repos;
+  return keys
     .map(parseRepo)
     .filter(Boolean)
     .map(({ owner, repo }) => ({ owner, repo, key: `${owner}/${repo}` }));

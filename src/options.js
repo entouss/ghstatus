@@ -1,4 +1,11 @@
-import { loadConfig, saveConfig, parseRepo, ensureHostPermission } from "./lib/config.js";
+import {
+  loadConfig,
+  saveConfig,
+  parseRepoList,
+  formatRepoList,
+  flattenGroups,
+  ensureHostPermission,
+} from "./lib/config.js";
 import { checkToken } from "./lib/github-api.js";
 import { permissionHint } from "./lib/rest.js";
 
@@ -13,7 +20,7 @@ const savedEl = document.getElementById("saved");
 const tokenResultEl = document.getElementById("token-result");
 
 let config = await loadConfig();
-fields.repos.value = config.repos.join("\n");
+fields.repos.value = formatRepoList(config.groups);
 fields.token.value = config.token;
 fields.authMode.value = config.authMode;
 fields.host.value = config.host;
@@ -23,14 +30,11 @@ document.getElementById("save").addEventListener("click", save);
 document.getElementById("test").addEventListener("click", test);
 
 function collect() {
-  const repos = fields.repos.value
-    .split("\n")
-    .map((line) => parseRepo(line))
-    .filter(Boolean)
-    .map(({ owner, repo }) => `${owner}/${repo}`);
+  const groups = parseRepoList(fields.repos.value);
 
   return {
-    repos: [...new Set(repos)],
+    groups,
+    repos: flattenGroups(groups),
     token: fields.token.value.trim(),
     authMode: fields.authMode.value,
     host: fields.host.value.trim().replace(/^https?:\/\//, "").replace(/\/.*$/, "") || "github.com",
@@ -51,7 +55,7 @@ async function save() {
   config = next;
 
   // Show back exactly what was stored, so dropped or normalised lines are visible.
-  fields.repos.value = next.repos.join("\n");
+  fields.repos.value = formatRepoList(next.groups);
   fields.host.value = next.host;
   fields.cacheTtlSeconds.value = next.cacheTtlSeconds;
   note(savedEl, `Saved ${next.repos.length} ${next.repos.length === 1 ? "repo" : "repos"}`, "ok");

@@ -4,8 +4,11 @@ A Chrome extension that shows, at a glance, the deployment state of every
 environment across the repos you care about.
 
 ```
-› 🟥 my-org/api                        3 envs · 12m ago
-› 🟩 my-org/web                        2 envs · 4h ago
+▾ 🟥 PAYMENTS                                        2 repos
+    › 🟥 my-org/api                    3 envs · 12m ago
+    › 🟩 my-org/web                    2 envs · 4h ago
+▾ 🟧 PLATFORM                                        1 repo
+    › 🟧 my-org/infra                  5 envs · 1m ago
 ```
 
 Expand a repo for its environments, and an environment for its detail and
@@ -27,11 +30,11 @@ history:
           Links         View logs · Open environment
 
           PAST DEPLOYMENTS
-             DEPLOYMENT                      COMMIT    DEPLOYED
-          🟩                                 9f2e10c   2d ago · @alice ↗
+             DEPLOYMENT                    DEPLOYED          COMMIT
+          🟩                               2d ago · @alice   9f2e10c ↗
              Deploy
              deploy (production)   1m 20s  ▓▓▓▓▓░░░░░
-          🟩                                 41ab7c3   6d ago · @alice ↗
+          🟩                               6d ago · @alice   41ab7c3 ↗
              Release and deploy to environment
              deploy / terraform apply   3m 04s  ▓▓▓▓▓▓▓▓▓▓
     › ⬜ preview                                  no deployments
@@ -44,8 +47,9 @@ history:
 | 🟥 | `failure`, `error` |
 | ⬜ | `inactive`, `destroyed`, no deployments, unknown |
 
-The repo's dot is a **rollup: the worst state across its environments**, so a
-broken production shows red even while another environment is mid-deploy.
+Each dot is a **rollup of the level beneath it**: a group is as bad as its
+worst repo, and a repo as bad as its worst environment. So a broken production
+shows red all the way up, even while another environment is mid-deploy.
 Note this is the opposite of how a single card is read — there, a run happening
 *now* supersedes the outcome printed beside it. Both orderings live in
 [`src/lib/state.js`](src/lib/state.js) (`SEVERITY` and `CARD_PRIORITY`).
@@ -81,7 +85,23 @@ git clone https://github.com/entouss/ghstatus && cd ghstatus
 
 1. Open `chrome://extensions`, turn on **Developer mode**.
 2. **Load unpacked** → pick this directory.
-3. Click the extension icon → **Settings**, add repos as `org/repo`, one per line.
+3. Click the extension icon → **Settings**, add repos as `org/repo`, one per
+   line. End a line with a colon to start a group:
+
+   ```
+   my-org/shared-tooling
+
+   Payments:
+   my-org/api
+   my-org/web
+
+   Platform:
+   my-org/infra
+   ```
+
+   Repos listed above the first group stay ungrouped and render without a
+   heading. A repo URL contains a colon but never ends with one, so the two
+   can't be confused.
 
 No build step: the source is loaded as-is.
 
@@ -117,8 +137,8 @@ fallback; with no token, only the session is used.
 
 ## Behaviour
 
-- **Repos are collapsed by default.** What you expand is remembered across
-  popup openings.
+- **Groups are open by default, repos collapsed.** What you expand or collapse
+  is remembered across popup openings.
 - **History and Actions jobs are fetched lazily** — only when you expand an
   environment, in parallel, and only the latest 10 deployments — so the initial
   dashboard stays cheap.

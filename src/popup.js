@@ -1,7 +1,7 @@
-import { loadConfig, deploymentsUrl, environmentUrl, webBase } from "./lib/config.js";
+import { loadConfig, deploymentsUrl, environmentUrl, parseRepo, webBase } from "./lib/config.js";
 import { loadAll, loadHistory, orderedRepos, readCache, HISTORY_LIMIT } from "./lib/loader.js";
 import { deploymentSubtitle } from "./lib/deployment.js";
-import { EMOJI, BUCKET_LABEL, stateLabel } from "./lib/state.js";
+import { EMOJI, BUCKET_LABEL, stateLabel, mostSevere } from "./lib/state.js";
 import { timeAgo, duration, durationMs, formatDuration, formatDate, shortSha } from "./lib/util.js";
 
 const reposEl = document.getElementById("repos");
@@ -46,8 +46,11 @@ async function init() {
   const cache = await readCache();
   for (const repo of repos) {
     if (cache[repo.key]) results.set(repo.key, cache[repo.key]);
-    reposEl.append(renderRepo(repo, cache[repo.key]));
   }
+  for (const group of config.groups) {
+    reposEl.append(renderGroup(group, cache));
+  }
+  updateGroupHeaders();
 
   refresh({ force: false });
 }
@@ -65,6 +68,7 @@ async function refresh({ force }) {
       (result) => {
         results.set(result.key, result);
         document.getElementById(rowId(result.key))?.replaceWith(renderRepo(result, result));
+        updateGroupHeaders();
       },
       { force, signal: controller.signal }
     );
@@ -78,13 +82,18 @@ async function refresh({ force }) {
 
 // --- expansion state -------------------------------------------------------
 
-function isOpen(key) {
-  return Boolean(expanded[key]);
+function isOpen(key, fallback = false) {
+  return key in expanded ? Boolean(expanded[key]) : fallback;
 }
 
-function setOpen(key, open) {
-  if (open) expanded[key] = true;
-  else delete expanded[key];
+/**
+ * Only deviations from the default are stored. Groups default to open, so
+ * their closed state has to be recorded rather than dropped — deleting the
+ * key would make a collapsed group spring open on the next visit.
+ */
+function setOpen(key, open, fallback = false) {
+  if (open === fallback) delete expanded[key];
+  else expanded[key] = open;
   chrome.storage.local.set({ [EXPANDED_KEY]: expanded });
 }
 
@@ -92,10 +101,62 @@ function rowId(key) {
   return `repo-${key.replace(/[^\w-]/g, "_")}`;
 }
 
+// --- groups ----------------------------------------------------------------
+
+/** Groups the user named, each rolling its repos up the way a repo rolls up
+ *  its environments. An unnamed group is the repos listed before any header,
+ *  and renders without a heading. */
+function renderGroup(group, cache) {
+  const repos = group.repos.map(parseRepo).filter(Boolean)
+    .map(({ owner, repo }) => ({ owner, repo, key: `${owner}/${repo}` }));
+
+  if (!group.name) {
+    const bare = el("div", { class: "group" });
+    for (const repo of repos) bare.append(renderRepo(repo, cache[repo.key]));
+    return bare;
+  }
+
+  const key = `group#${group.name}`;
+  const box = el("details", { class: "group", "data-group": group.name });
+  if (isOpen(key, true)) box.open = true;
+  box.addEventListener("toggle", () => setOpen(key, box.open, true));
+
+  const summary = el("summary", { class: "row group-head" });
+  summary.append(
+    chevron(),
+    el("span", { class: "dot group-dot" }, EMOJI.idle),
+    el("span", { class: "group-name" }, group.name),
+    el("span", { class: "grow" }),
+    el("span", { class: "meta" }, `${repos.length} repo${repos.length === 1 ? "" : "s"}`)
+  );
+  box.append(summary);
+
+  const body = el("div", { class: "group-body" });
+  for (const repo of repos) body.append(renderRepo(repo, cache[repo.key]));
+  box.append(body);
+  return box;
+}
+
+/** A group is as bad as its worst repo — the same rollup, one level up. */
+function updateGroupHeaders() {
+  for (const box of document.querySelectorAll(".group[data-group]")) {
+    const keys = [...box.querySelectorAll(".repo")].map((el) => el.dataset.key);
+    const loaded = keys.map((key) => results.get(key)).filter(Boolean);
+    const bucket = mostSevere(loaded.map((r) => r.bucket));
+
+    const dot = box.querySelector(".group-dot");
+    dot.textContent = loaded.length ? EMOJI[bucket] : EMOJI.idle;
+    dot.title = concept("GROUP", [
+      `${box.dataset.group} — the worst state across its ${keys.length} repositories`,
+      loaded.length < keys.length ? "Still loading some of them." : BUCKET_LABEL[bucket],
+    ]);
+  }
+}
+
 // --- repo level ------------------------------------------------------------
 
 function renderRepo(repo, result) {
-  const box = el("details", { class: "repo", id: rowId(repo.key) });
+  const box = el("details", { class: "repo", id: rowId(repo.key), "data-key": repo.key });
   if (isOpen(repo.key)) box.open = true;
   box.addEventListener("toggle", () => setOpen(repo.key, box.open));
 
@@ -382,10 +443,10 @@ function renderHistory(deployments) {
       el("div", { class: "row" },
         el("span", { class: "dot" }, EMOJI[d.bucket]),
         el("span", { class: "grow" }),
+        el("span", { class: "meta" }, envMeta(d)),
         d.sha
           ? link(d.shaUrl, shortSha(d.sha), "sha mono", concept(COMMIT, [d.sha]))
           : el("span", { class: "sha mono" }, "—"),
-        el("span", { class: "meta" }, envMeta(d)),
         // Straight to the job that deployed, falling back to the whole run when
         // we could not resolve one.
         jobLink(d)
@@ -427,8 +488,8 @@ function historyHeader() {
       el("span", { class: "dot" }),
       el("span", { class: "deployment-head" }, "Deployment"),
       el("span", { class: "grow" }),
-      el("span", { class: "sha" }, "Commit"),
       el("span", { class: "meta" }, "Deployed"),
+      el("span", { class: "sha" }, "Commit"),
       el("span", { class: "open" })
     )
   );

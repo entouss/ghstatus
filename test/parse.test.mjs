@@ -14,7 +14,13 @@ import {
   refKind,
   imageUrl,
 } from "../src/lib/deployment.js";
-import { parseRepo, environmentUrl } from "../src/lib/config.js";
+import {
+  parseRepo,
+  environmentUrl,
+  parseRepoList,
+  formatRepoList,
+  flattenGroups,
+} from "../src/lib/config.js";
 import { mapLimit, timeAgo, duration, durationMs, shortSha } from "../src/lib/util.js";
 import {
   runIdFromUrl,
@@ -570,6 +576,53 @@ test("parseRepo accepts the shapes people paste", () => {
   });
   assert.equal(parseRepo(""), null);
   assert.equal(parseRepo("just-an-org"), null);
+});
+
+test("parseRepoList reads groups out of the textarea", () => {
+  const groups = parseRepoList(`
+    System 1:
+    my-org/api
+    my-org/web
+
+    System 2:
+    my-org/infra
+  `);
+  assert.deepEqual(groups, [
+    { name: "System 1", repos: ["my-org/api", "my-org/web"] },
+    { name: "System 2", repos: ["my-org/infra"] },
+  ]);
+});
+
+test("repos above the first group stay ungrouped", () => {
+  const groups = parseRepoList("my-org/loose\nSystem 1:\nmy-org/api");
+  assert.deepEqual(groups, [
+    { name: null, repos: ["my-org/loose"] },
+    { name: "System 1", repos: ["my-org/api"] },
+  ]);
+});
+
+test("a repo URL is not mistaken for a group header", () => {
+  // It contains a colon but does not end with one, which is the whole rule.
+  const groups = parseRepoList("https://github.com/my-org/api");
+  assert.deepEqual(groups, [{ name: null, repos: ["my-org/api"] }]);
+});
+
+test("parseRepoList drops empty groups and duplicate repos", () => {
+  const groups = parseRepoList("Empty:\n\nSystem:\nmy-org/api\nmy-org/api");
+  assert.deepEqual(groups, [{ name: "System", repos: ["my-org/api"] }]);
+});
+
+test("groups survive a round trip through the textarea", () => {
+  const text = "my-org/loose\n\nSystem 1:\nmy-org/api\nmy-org/web";
+  assert.equal(formatRepoList(parseRepoList(text)), text);
+});
+
+test("flattenGroups gives every repo once, in order", () => {
+  const groups = [
+    { name: "A", repos: ["o/one", "o/two"] },
+    { name: "B", repos: ["o/two", "o/three"] },
+  ];
+  assert.deepEqual(flattenGroups(groups), ["o/one", "o/two", "o/three"]);
 });
 
 test("mapLimit preserves order while bounding concurrency", async () => {

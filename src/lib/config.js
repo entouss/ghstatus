@@ -1,8 +1,13 @@
 // Persisted settings + the derived URLs everything else builds on.
 
 export const DEFAULTS = {
-  /** @type {string[]} entries of the form "org/repo" */
+  /** @type {string[]} every configured repo, flattened out of `groups` */
   repos: [],
+  /**
+   * Repos as the user arranged them.
+   * @type {Array<{name: string|null, repos: string[]}>}
+   */
+  groups: [],
   /** Personal access token, used when session auth is unavailable. */
   token: "",
   /** "auto" | "session" | "pat" */
@@ -15,7 +20,65 @@ export const DEFAULTS = {
 
 export async function loadConfig() {
   const stored = await chrome.storage.local.get(Object.keys(DEFAULTS));
-  return { ...DEFAULTS, ...stored };
+  const config = { ...DEFAULTS, ...stored };
+
+  // Installs that predate grouping have a flat list and no groups.
+  if (!config.groups.length && config.repos.length) {
+    config.groups = [{ name: null, repos: config.repos }];
+  }
+  return config;
+}
+
+/**
+ * Parse the repo textarea. A line ending in a colon opens a group; repos
+ * listed before any such line stay ungrouped. Repo URLs contain colons but
+ * never end with one, so the two can't be confused.
+ *
+ *   System 1:
+ *     my-org/api
+ *     my-org/web
+ *
+ * @returns {Array<{name: string|null, repos: string[]}>}
+ */
+export function parseRepoList(text) {
+  const groups = [];
+  let current = null;
+
+  for (const raw of String(text || "").split("\n")) {
+    const line = raw.trim();
+    if (!line) continue;
+
+    const header = line.match(/^(.+?)\s*:$/);
+    if (header) {
+      current = { name: header[1].trim(), repos: [] };
+      groups.push(current);
+      continue;
+    }
+
+    const parsed = parseRepo(line);
+    if (!parsed) continue;
+
+    if (!current) {
+      current = { name: null, repos: [] };
+      groups.unshift(current);
+    }
+    const key = `${parsed.owner}/${parsed.repo}`;
+    if (!current.repos.includes(key)) current.repos.push(key);
+  }
+
+  return groups.filter((group) => group.repos.length);
+}
+
+/** Render groups back to the textarea, so a save shows what was kept. */
+export function formatRepoList(groups) {
+  return groups
+    .map((group) => (group.name ? `${group.name}:\n${group.repos.join("\n")}` : group.repos.join("\n")))
+    .join("\n\n");
+}
+
+/** Every repo across every group, in order. */
+export function flattenGroups(groups) {
+  return [...new Set(groups.flatMap((group) => group.repos))];
 }
 
 export async function saveConfig(patch) {
