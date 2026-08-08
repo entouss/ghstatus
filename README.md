@@ -7,8 +7,8 @@ environment across the repos you care about.
 ▾ 🟥 PAYMENTS                                        2 repos
     › 🟥 my-org/api                    3 envs · 12m ago
     › 🟩 my-org/web                    2 envs · 4h ago
-▾ 🟧 PLATFORM                                        1 repo
-    › 🟧 my-org/infra                  5 envs · 1m ago
+▾ 🟦 PLATFORM                                        1 repo
+    › 🟦 my-org/infra                  5 envs · 1m ago
 ```
 
 Expand a repo for its environments, and an environment for its detail and
@@ -43,7 +43,7 @@ history:
 | | State |
 |---|---|
 | 🟩 | `success`, `active` |
-| 🟧 | `in_progress`, `queued`, `pending`, `waiting` (approval) |
+| 🟦 | `in_progress`, `queued`, `pending`, `waiting` (approval) |
 | 🟥 | `failure`, `error` |
 | ⬜ | `inactive`, `destroyed`, no deployments, unknown |
 
@@ -55,7 +55,7 @@ Note this is the opposite of how a single card is read — there, a run happenin
 [`src/lib/state.js`](src/lib/state.js) (`SEVERITY` and `CARD_PRIORITY`).
 
 A deployment that GitHub has created but not yet reported a status for is shown
-as 🟧 in progress rather than blank, marked *(no status reported)*.
+as 🟦 in progress rather than blank, marked *(no status reported)*.
 
 **`inactive` is not an outcome.** GitHub appends an `inactive` status to a
 deployment once a later one supersedes it, which says nothing about whether it
@@ -260,7 +260,7 @@ src/
   options.{html,css,js}    settings
   lib/
     config.js              storage + URL derivation
-    state.js               state -> 🟩🟧🟥⬜, and the two orderings
+    state.js               state -> 🟩🟦🟥⬜, and the two orderings
     deployment.js          the shape both auth paths produce
     rest.js                one authenticated REST call
     github-api.js          PAT path (REST API)

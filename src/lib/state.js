@@ -6,7 +6,7 @@
 export const EMOJI = {
   ok: "\u{1F7E9}", // green
   bad: "\u{1F7E5}", // red
-  busy: "\u{1F7E7}", // orange
+  busy: "\u{1F7E6}", // blue
   idle: "\u{2B1C}", // white
 };
 
