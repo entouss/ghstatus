@@ -174,19 +174,70 @@ function runJson(run) {
   });
 }
 
+/** The workflows the repo defines, whether or not any of them has ever run. */
+export async function fetchWorkflows(config, owner, repo, { signal } = {}) {
+  const data = await api(config, `/repos/${owner}/${repo}/actions/workflows?per_page=100`, { signal });
+  return (data.workflows || []).map(normalizeWorkflow);
+}
+
+function normalizeWorkflow(workflow) {
+  return {
+    id: workflow.id ? String(workflow.id) : null,
+    name: workflow.name || null,
+    path: workflow.path || null,
+    // The last segment addresses the workflow on the web — /actions/workflows/ci.yml.
+    file: workflow.path ? workflow.path.split("/").pop() : null,
+    state: workflow.state || null,
+    rawJson: workflowJson(workflow),
+  };
+}
+
+function workflowJson(workflow) {
+  return toJsonSnippet({
+    workflow: {
+      id: workflow.id,
+      name: workflow.name,
+      path: workflow.path,
+      state: workflow.state,
+      created_at: workflow.created_at,
+      updated_at: workflow.updated_at,
+    },
+  });
+}
+
 /**
- * One entry per workflow: its most recent run. The runs endpoint returns
- * newest first, so the first sighting of a workflow is its latest run, and
- * the result stays ordered by how recently each workflow ran.
+ * The repo's workflows, each carrying its latest run.
+ *
+ * The list is the workflows the repo defines — not the runs that happened to
+ * be recent. A run's `name` is the run's own title (a `run-name:` can make
+ * every run of one workflow read differently), so the name here comes from the
+ * definition and the run is joined on `workflow_id`.
+ *
+ * Ordered by how recently each ran, since that is what you scan for; the ones
+ * that have never run sort last, alphabetically.
  */
-export function summariseWorkflows(runs) {
+export function summariseWorkflows(workflows, runs = []) {
   const latest = new Map();
   for (const run of runs) {
-    const key = run.workflowId || run.workflowName;
-    if (!key || latest.has(key)) continue;
-    latest.set(key, run);
+    // Runs come back newest first, so the first sighting is the latest run.
+    if (run.workflowId && !latest.has(run.workflowId)) latest.set(run.workflowId, run);
   }
-  return [...latest.values()];
+
+  return workflows
+    .map((workflow) => {
+      const run = (workflow.id && latest.get(workflow.id)) || null;
+      return {
+        ...workflow,
+        run,
+        bucket: run ? run.bucket : "idle",
+        lastRunAt: run ? run.createdAt : null,
+      };
+    })
+    .sort((a, b) => {
+      if (a.lastRunAt && b.lastRunAt) return b.lastRunAt.localeCompare(a.lastRunAt);
+      if (a.lastRunAt || b.lastRunAt) return a.lastRunAt ? -1 : 1;
+      return (a.name || "").localeCompare(b.name || "");
+    });
 }
 
 /**

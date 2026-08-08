@@ -242,14 +242,16 @@ function renderWorkflows(result) {
   box.append(summary);
 
   const list = el("ul", { class: "row-list" });
-  for (const run of workflows) {
-    const item = el("li", { class: "row workflow-row", title: runTooltip(run) });
+  for (const workflow of workflows) {
+    const item = el("li", { class: "row workflow-row", title: workflowTooltip(workflow) });
     item.append(
-      el("span", { class: "dot" }, EMOJI[run.bucket] || EMOJI.idle),
-      el("span", { class: "workflow-name" }, run.workflowName || "Unnamed workflow"),
+      el("span", { class: "dot" }, EMOJI[workflow.bucket] || EMOJI.idle),
+      el("span", { class: "workflow-name" }, workflow.name || workflow.file || "Unnamed workflow"),
       el("span", { class: "grow" }),
-      el("span", { class: "meta" }, [run.event, timeAgo(run.createdAt)].filter(Boolean).join(" · ")),
-      run.url ? openLink(run.url, "Open this workflow's latest run") : el("span", { class: "open" })
+      el("span", { class: "meta" }, workflowMeta(workflow)),
+      workflow.url
+        ? openLink(workflow.url, "Open this workflow's runs")
+        : el("span", { class: "open" })
     );
     list.append(item);
   }
@@ -257,15 +259,39 @@ function renderWorkflows(result) {
   return box;
 }
 
-function runTooltip(run) {
-  const lines = [
-    `Workflow: ${run.workflowName || "unnamed"}`,
-    `Status: ${stateLabel(run.status)} — where the run is in its lifecycle`,
-    `Conclusion: ${run.conclusion ? stateLabel(run.conclusion) : "not finished yet"} — how it ended`,
+/** What the workflow last did, or that it hasn't. */
+function workflowMeta(workflow) {
+  const disabled = workflow.state && workflow.state !== "active";
+  const run = workflow.run;
+  const parts = [
+    disabled ? "disabled" : null,
+    run ? run.event : "never run",
+    run ? timeAgo(run.createdAt) : null,
   ];
+  return parts.filter(Boolean).join(" · ");
+}
+
+function workflowTooltip(workflow) {
+  const lines = [
+    `Name: ${workflow.name || "unnamed"}`,
+    workflow.path ? `File: ${workflow.path}` : null,
+    workflow.state ? `State: ${stateLabel(workflow.state)}` : null,
+  ];
+
+  const run = workflow.run;
+  if (!run) {
+    lines.push("No run among this repository's 100 most recent.");
+    return concept(WORKFLOW_DEF, lines, workflow.rawJson);
+  }
+
+  lines.push(
+    "LATEST RUN — one execution of this workflow:",
+    `Status: ${stateLabel(run.status)} — where the run is in its lifecycle`,
+    `Conclusion: ${run.conclusion ? stateLabel(run.conclusion) : "not finished yet"} — how it ended`
+  );
   if (run.event) lines.push(`Triggered by: ${run.event}`);
   if (run.createdAt) lines.push(`Started: ${formatDate(run.createdAt)}`);
-  return concept("WORKFLOW RUN — one execution of a workflow", lines, run.rawJson);
+  return concept(WORKFLOW_DEF, lines, [workflow.rawJson, run.rawJson].filter(Boolean).join("\n"));
 }
 
 // --- environment level -----------------------------------------------------
@@ -351,6 +377,7 @@ function concept(name, lines = [], json = null) {
 const DEPLOYMENT = "DEPLOYMENT — a request to deploy one commit to one environment";
 const ENVIRONMENT = "ENVIRONMENT — a named deploy target, with its own protection rules";
 const WORKFLOW = "WORKFLOW — the Actions workflow whose run produced this deployment";
+const WORKFLOW_DEF = "WORKFLOW — an automation the repo defines in .github/workflows";
 const JOB = "JOB — one job inside that workflow run; a job is where the steps run";
 const COMMIT = "COMMIT — the code that was deployed";
 

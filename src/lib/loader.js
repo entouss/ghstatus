@@ -103,24 +103,30 @@ async function loadRepo(config, owner, repo, { signal }) {
 }
 
 /**
- * One request for the repo's recent runs, serving two purposes: naming the
- * workflow behind each environment's current deployment, and listing every
- * workflow with its latest run. Best effort — both are decoration, and a
- * failure here must not cost us the deployments.
- * @returns {Promise<object[]>} one entry per workflow, most recent first
+ * The repo's workflows, each with its latest run — and, from the same runs,
+ * the name of the workflow behind every environment's current deployment.
+ * Two requests per repo rather than per environment. Best effort: both are
+ * decoration, and a failure here must not cost us the deployments.
+ * @returns {Promise<object[]>} one entry per defined workflow
  */
 async function loadWorkflows(config, owner, repo, environments, { signal }) {
   if (!config.token) return [];
 
-  let runs;
+  let runs = [];
+  let workflows = [];
   try {
-    runs = await actions.fetchRecentRuns(config, owner, repo, { signal });
+    [workflows, runs] = await Promise.all([
+      actions.fetchWorkflows(config, owner, repo, { signal }),
+      actions.fetchRecentRuns(config, owner, repo, { signal }),
+    ]);
   } catch (err) {
     if (err?.name === "AbortError") throw err;
     return [];
   }
 
   const base = `${webBase(config)}/${owner}/${repo}`;
+  const byId = new Map(workflows.map((workflow) => [workflow.id, workflow]));
+
   for (const env of environments) {
     const latest = env.latest;
     if (!latest?.sha || latest.workflowName) continue;
@@ -133,14 +139,21 @@ async function loadWorkflows(config, owner, repo, environments, { signal }) {
       : actions.pickRunForDeployment(runs, latest);
     if (!run) continue;
 
-    latest.workflowName = run.workflowName;
+    // The workflow's name, not the run's title, so the environment and the
+    // workflows list above it say the same thing.
+    latest.workflowName = byId.get(run.workflowId)?.name || run.workflowName;
     if (!latest.runId) {
       latest.runId = run.id;
       latest.runUrl = `${base}/actions/runs/${run.id}`;
     }
   }
 
-  return actions.summariseWorkflows(runs);
+  return actions.summariseWorkflows(workflows, runs).map((workflow) => ({
+    ...workflow,
+    // The workflow's own page — every run of it, which is what the name in the
+    // list refers to. Its latest run is reachable from the row's tooltip.
+    url: workflow.file ? `${base}/actions/workflows/${encodeURIComponent(workflow.file)}` : null,
+  }));
 }
 
 /**

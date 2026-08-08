@@ -472,29 +472,43 @@ test("a run the deployment already names is not re-guessed by commit", () => {
   assert.equal(runs.find((r) => r.id === "7").workflowName, "Deploy");
 });
 
-test("summariseWorkflows keeps each workflow's latest run", () => {
+const WORKFLOWS = [
+  { id: "1", name: "Deploy", file: "deploy.yml", state: "active" },
+  { id: "2", name: "CI", file: "ci.yml", state: "active" },
+  { id: "3", name: "Nightly", file: "nightly.yml", state: "active" },
+];
+
+test("summariseWorkflows joins each defined workflow to its latest run", () => {
   // The runs endpoint returns newest first, so first sighting wins.
   const runs = [
-    { workflowId: "1", workflowName: "Deploy", id: "300" },
-    { workflowId: "2", workflowName: "CI", id: "299" },
-    { workflowId: "1", workflowName: "Deploy", id: "250" },
-    { workflowId: "2", workflowName: "CI", id: "240" },
+    { workflowId: "2", id: "300", createdAt: "2026-08-07T10:00:00Z", bucket: "bad" },
+    { workflowId: "1", id: "299", createdAt: "2026-08-07T09:00:00Z", bucket: "ok" },
+    { workflowId: "1", id: "250", createdAt: "2026-08-06T09:00:00Z", bucket: "bad" },
   ];
   assert.deepEqual(
-    summariseWorkflows(runs).map((r) => [r.workflowName, r.id]),
-    [["Deploy", "300"], ["CI", "299"]]
+    summariseWorkflows(WORKFLOWS, runs).map((w) => [w.name, w.run?.id ?? null, w.bucket]),
+    [
+      ["CI", "300", "bad"], // most recent run first
+      ["Deploy", "299", "ok"],
+      ["Nightly", null, "idle"], // never run, so it sorts last
+    ]
   );
 });
 
-test("summariseWorkflows falls back to the name when there is no id", () => {
-  const runs = [
-    { workflowId: null, workflowName: "Deploy", id: "2" },
-    { workflowId: null, workflowName: "Deploy", id: "1" },
-    { workflowId: null, workflowName: null, id: "0" },
-  ];
-  // The unnamed, unidentified run is not a workflow we can list.
-  assert.deepEqual(summariseWorkflows(runs).map((r) => r.id), ["2"]);
-  assert.deepEqual(summariseWorkflows([]), []);
+test("summariseWorkflows lists workflows that have never run", () => {
+  // The list is what the repo defines, not what happened to run recently.
+  assert.deepEqual(
+    summariseWorkflows(WORKFLOWS, []).map((w) => w.name),
+    ["CI", "Deploy", "Nightly"] // alphabetical, none having run
+  );
+  assert.deepEqual(summariseWorkflows([], [{ workflowId: "1", id: "9" }]), []);
+});
+
+test("summariseWorkflows ignores a run whose workflow is gone", () => {
+  // A workflow deleted from the default branch keeps its runs; it is no longer
+  // something the repo defines, so it is not something the list shows.
+  const runs = [{ workflowId: "99", id: "300", createdAt: "2026-08-07T10:00:00Z" }];
+  assert.deepEqual(summariseWorkflows(WORKFLOWS, runs).map((w) => w.run), [null, null, null]);
 });
 
 test("permissionFor names the permission each endpoint needs", () => {

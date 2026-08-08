@@ -16,7 +16,7 @@ history:
 
 ```
 ▾ 🟥 my-org/api                                    3 envs · 12m ago
-    › WORKFLOWS                                                4
+    › WORKFLOWS                                                5
     › 🟩 production  v2.3.1              2h ago · @alice   9f2e10c
          Deploy
     ▾ 🟥 staging     ghcr.io/…:2.4.0-rc1  12m ago · @bob    abc1234
@@ -132,7 +132,7 @@ for repos you can't reach from this browser session. Scopes:
 
 - classic: `repo`
 - fine-grained: read access to *Deployments*, *Environments*, *Contents* and
-  *Actions* (the last one only for the jobs list)
+  *Actions* (the last one for the workflows list and the jobs)
 
 The token lives in `chrome.storage.local` for this profile only. **Settings →
 Test** verifies it.
@@ -155,9 +155,13 @@ fallback; with no token, only the session is used.
   environment: the repo's recent runs are fetched once and matched to each
   environment's deployment by commit, preferring a run that names the
   environment.
-- Each repo lists its **workflows** — every one with its latest run, what
-  triggered it and how it ended — above the environments, collapsed by
-  default. This reuses the same recent-runs request, so it is free.
+- Each repo lists its **workflows** above the environments, collapsed by
+  default: every workflow the repo defines in `.github/workflows`, ordered by
+  how recently it ran, with the state, trigger and time of that latest run —
+  or "never run" for one that has no run among the repo's 100 most recent.
+  A run's own `name` is the *run's* title (a `run-name:` can differ per run),
+  so names come from the workflow definition and runs are joined on
+  `workflow_id`. That is one extra request per repo.
 - Failures are reported per repo, so one bad repo doesn't blank the dashboard.
 
 ### Getting to the Actions jobs
@@ -203,6 +207,7 @@ Almost everything on screen is a link back to where it came from:
 | ↗ on a repo | `/deployments` |
 | ↗ on an environment | `/deployments/<environment>` — its latest deployment |
 | ↗ on a past deployment | `/actions/runs/<runId>/job/<jobId>` |
+| ↗ on a workflow | `/actions/workflows/<file>` — every run of it |
 
 Where a link can't be derived with confidence the value is shown as plain
 text rather than pointed somewhere that might 404.
