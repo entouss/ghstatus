@@ -243,16 +243,13 @@ summary:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; 
   overflow: hidden;
 }
 
-.history-row,
-.job-row {
+.history-row {
   padding: 4px 7px;
   border-top: 1px solid var(--border);
   background: var(--surface);
 }
-.history-row:first-child,
-.job-row:first-child { border-top: none; }
-.history-row:hover,
-.job-row:hover { background: var(--surface-2); }
+.history-row:first-child { border-top: none; }
+.history-row:hover { background: var(--surface-2); }
 .history-row.head {
   font-size: 10px;
   font-weight: 600;
@@ -268,13 +265,6 @@ summary:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; 
   font-family: inherit;
   font-size: 10px;
   color: var(--muted);
-}
-
-.job-name {
-  flex: 0 1 auto;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 /* Commit and meta are fixed-width right-hand columns so they line up down the

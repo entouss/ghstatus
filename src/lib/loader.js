@@ -6,11 +6,10 @@ import * as actions from "./github-actions.js";
 import * as api from "./github-api.js";
 import * as html from "./github-html.js";
 import { mostSevere } from "./state.js";
-import { mapLimit } from "./util.js";
+import { duration, mapLimit } from "./util.js";
 
 const CACHE_KEY = "cache";
 const HISTORY_KEY = "historyCache";
-const JOBS_KEY = "jobsCache";
 const CONCURRENCY = 4;
 export const HISTORY_LIMIT = 10;
 
@@ -59,7 +58,7 @@ export async function loadAll(config, onResult, { force = false, signal } = {}) 
     onResult(result);
   });
 
-  if (force) await chrome.storage.local.remove([HISTORY_KEY, JOBS_KEY]);
+  if (force) await chrome.storage.local.remove(HISTORY_KEY);
   await chrome.storage.local.set({ [CACHE_KEY]: cache });
 }
 
@@ -155,6 +154,7 @@ async function attachJobLinks(config, result, deployments, { signal }) {
     deployment.jobName = job?.name || null;
     deployment.workflowName = job?.workflowName || deployment.workflowName || null;
     deployment.jobJson = job?.rawJson || null;
+    deployment.jobDuration = duration(job?.startedAt, job?.completedAt) || null;
   }
 }
 
@@ -187,36 +187,6 @@ async function findMissingRuns(config, result, deployments, { signal }) {
     deployment.runUrl = `${base}/actions/runs/${run.id}`;
     deployment.workflowName = run.workflowName;
   }
-}
-
-/**
- * The Actions jobs behind one deployment. Needs the API — there is no reliable
- * way to read a run's jobs out of the rendered page — so this is the one place
- * a token is required rather than merely preferred.
- */
-export async function loadJobs(config, result, deployment, { signal } = {}) {
-  if (!config.token) {
-    throw new Error("Actions jobs need a token — add one in options");
-  }
-
-  const cacheKey = `${result.key}#${deployment.id ?? deployment.sha}`;
-  const { [JOBS_KEY]: cache = {} } = await chrome.storage.local.get(JOBS_KEY);
-  const cached = cache[cacheKey];
-  if (cached && cached.fetchedAt > Date.now() - config.cacheTtlSeconds * 1000) {
-    return cached.run;
-  }
-
-  const run = await actions.fetchDeploymentJobs(
-    config,
-    result.owner,
-    result.repo,
-    deployment,
-    { signal }
-  );
-
-  cache[cacheKey] = { run, fetchedAt: Date.now() };
-  await chrome.storage.local.set({ [JOBS_KEY]: cache });
-  return run;
 }
 
 /** Worst state across environments, and the freshest update among them. */

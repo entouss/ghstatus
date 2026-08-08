@@ -2,7 +2,7 @@
 //
 // A deployment status usually carries a log_url pointing straight at the run,
 // which is the reliable route. When it doesn't — some tooling puts the deployed
-// site in target_url instead — we fall back to looking up runs by commit.
+// site in target_url instead — the run is found by the commit it deployed.
 
 import { api } from "./rest.js";
 import { toJsonSnippet } from "./util.js";
@@ -88,16 +88,6 @@ export function runIdFromUrl(url) {
   return m ? m[1] : null;
 }
 
-/**
- * The jobs of the run behind a deployment.
- * @returns {Promise<{runId: string, jobs: Job[]}>}
- */
-export async function fetchDeploymentJobs(config, owner, repo, deployment, { signal } = {}) {
-  const runId = deployment.runId || (await findRunId(config, owner, repo, deployment, { signal }));
-  if (!runId) throw new Error("No Actions run found for this deployment");
-  return { runId, jobs: await fetchRunJobs(config, owner, repo, runId, { signal }) };
-}
-
 /** @returns {Promise<Job[]>} */
 export async function fetchRunJobs(config, owner, repo, runId, { signal } = {}) {
   const data = await api(
@@ -156,7 +146,3 @@ export async function findRun(config, owner, repo, deployment, { signal } = {}) 
   return { id: String(match.id), workflowName: match.name || null };
 }
 
-export async function findRunId(config, owner, repo, deployment, { signal } = {}) {
-  const run = await findRun(config, owner, repo, deployment, { signal });
-  return run?.id || null;
-}

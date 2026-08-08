@@ -1,12 +1,5 @@
 import { loadConfig, deploymentsUrl, environmentUrl, webBase } from "./lib/config.js";
-import {
-  loadAll,
-  loadHistory,
-  loadJobs,
-  orderedRepos,
-  readCache,
-  HISTORY_LIMIT,
-} from "./lib/loader.js";
+import { loadAll, loadHistory, orderedRepos, readCache, HISTORY_LIMIT } from "./lib/loader.js";
 import { deploymentSubtitle } from "./lib/deployment.js";
 import { EMOJI, BUCKET_LABEL, stateLabel } from "./lib/state.js";
 import { timeAgo, duration, formatDate, shortSha } from "./lib/util.js";
@@ -188,7 +181,6 @@ function renderEnv(result, env) {
 
   const body = el("div", { class: "body" });
   body.append(latest ? renderFacts(latest) : el("div", { class: "note" }, "No deployments yet"));
-  if (latest) body.append(el("div", { class: "jobs" }));
   body.append(el("div", { class: "history" }));
   box.append(body);
 
@@ -196,10 +188,8 @@ function renderEnv(result, env) {
   return box;
 }
 
-/** Jobs and history load together, in parallel, the first time you expand. */
 function fillDetails(box, result, env) {
-  fillHistory(box, result, env.name);
-  if (env.latest) fillJobs(box, result, env.latest);
+  fillHistory(box, result, env);
 }
 
 function envMeta(latest) {
@@ -237,6 +227,8 @@ function stateTooltip(d) {
   }
   if (d.inferredState) lines.push("No status reported yet — assumed in progress");
   if (d.updatedAt) lines.push(`Updated: ${formatDate(d.updatedAt)}`);
+  const took = duration(d.createdAt, d.updatedAt);
+  if (took) lines.push(`Took: ${took} from created to final status`);
   if (d.actor) lines.push(`Triggered by: @${d.actor}`);
   return concept(DEPLOYMENT, lines, d.rawJson);
 }
@@ -251,7 +243,8 @@ function renderFacts(d) {
   addFact(dl, "Triggered by", d.actor ? maybeLink(d.actorUrl, `@${d.actor}`) : null);
   addFact(dl, "Commit", d.sha ? maybeLink(d.shaUrl, shortSha(d.sha), "mono") : null);
   addFact(dl, "Workflow", d.workflowName || null);
-  addFact(dl, "Job", d.jobName ? maybeLink(d.jobUrl, d.jobName, "") : null);
+  addFact(dl, "Job", jobFact(d));
+  addFact(dl, "Took", deployDuration(d));
   addFact(dl, "Version", d.version ? maybeLink(d.versionUrl, d.version, "mono") : null);
   // These three run long, so they take a row to themselves.
   addFact(dl, "Image", d.image ? maybeLink(d.imageUrl, d.image, "mono wrap") : null, true);
@@ -264,6 +257,19 @@ function renderFacts(d) {
     addFact(dl, "Links", el("span", { class: "links" }, ...interleave(links, " · ")), true);
   }
   return dl;
+}
+
+/** The deploying job, with how long it ran when we know. */
+function jobFact(d) {
+  if (!d.jobName) return null;
+  const span = el("span", {}, maybeLink(d.jobUrl, d.jobName, ""));
+  if (d.jobDuration) span.append(el("span", { class: "hint" }, ` · ran ${d.jobDuration}`));
+  return span;
+}
+
+/** How long the deployment itself took: created until its status settled. */
+function deployDuration(d) {
+  return duration(d.createdAt, d.updatedAt) || null;
 }
 
 function statusValue(d) {
@@ -282,6 +288,9 @@ const FACT_HELP = {
   Version: "Read out of the deployment's free-form payload",
   Image: "Read out of the deployment's free-form payload",
   Description: "Free text set by whatever created the deployment",
+  Workflow: WORKFLOW,
+  Job: JOB,
+  Took: "From the deployment being created to its status settling",
   Links: "URLs carried on the deployment status: log_url and environment_url",
 };
 
@@ -292,98 +301,20 @@ function addFact(dl, label, value, wide = false) {
   dl.append(el("dt", attrs, label), el("dd", wide ? { class: "wide" } : {}, value));
 }
 
-// --- Actions jobs ----------------------------------------------------------
-
-async function fillJobs(box, result, deployment) {
-  const container = box.querySelector(".jobs");
-  if (!container || container.dataset.loaded === "yes" || container.dataset.loading === "yes") {
-    return;
-  }
-  container.dataset.loading = "yes";
-  container.replaceChildren(el("div", { class: "note" }, "Loading jobs…"));
-
-  try {
-    const run = await loadJobs(config, result, deployment, { signal: controller?.signal });
-    container.replaceChildren(renderJobs(run, result));
-    container.dataset.loaded = "yes";
-  } catch (err) {
-    if (err?.name === "AbortError") return;
-    container.replaceChildren(jobsFallback(err, deployment));
-  } finally {
-    container.dataset.loading = "no";
-  }
-}
-
-function renderJobs(run, result) {
-  const wrap = el("div");
-  const runUrl = `${repoUrl(result)}/actions/runs/${run.runId}`;
-
-  wrap.append(
-    el("div", { class: "section-head" },
-      el("span", { title: concept("WORKFLOW RUN — one execution of a workflow", [
-        "These are the jobs of the run that produced the current deployment.",
-      ]) }, "Actions jobs"),
-      openLink(runUrl, "Open the workflow run")
-    )
-  );
-
-  if (!run.jobs.length) {
-    wrap.append(el("div", { class: "note" }, "This run reported no jobs"));
-    return wrap;
-  }
-
-  const list = el("ul", { class: "row-list" });
-  for (const job of run.jobs) {
-    const item = el("li", { class: "row job-row", title: jobTooltip(job) });
-    item.append(
-      el("span", { class: "dot" }, EMOJI[job.bucket]),
-      maybeLink(job.url, job.name, "job-name"),
-      el("span", { class: "grow" }),
-      el("span", { class: "meta" }, duration(job.startedAt, job.completedAt))
-    );
-    list.append(item);
-  }
-  wrap.append(list);
-  return wrap;
-}
-
-function jobTooltip(job) {
-  const lines = [
-    `Name: ${job.name}`,
-    // These two are constantly confused: status is where the job is in its
-    // lifecycle, conclusion is how it ended.
-    `Status: ${stateLabel(job.status)} — where it is in its lifecycle`,
-    `Conclusion: ${job.conclusion ? stateLabel(job.conclusion) : "not finished yet"} — how it ended`,
-  ];
-  const ran = duration(job.startedAt, job.completedAt);
-  if (ran) lines.push(`Ran for: ${ran}`);
-  return concept(JOB, lines, job.rawJson);
-}
-
-/**
- * Without a token we can't list jobs, but we can still hand over the link to
- * the run when the deployment told us where it is.
- */
-function jobsFallback(err, deployment) {
-  const wrap = el("div", { class: "note" });
-  if (deployment.runUrl) {
-    wrap.append(link(deployment.runUrl, "Open the Actions run ↗"), ` — ${err.message}`);
-  } else {
-    wrap.append(err.message || "Could not load jobs");
-  }
-  return wrap;
-}
-
 // --- history ---------------------------------------------------------------
 
-async function fillHistory(box, result, envName) {
+async function fillHistory(box, result, env) {
   const container = box.querySelector(".history");
   if (container.dataset.loaded === "yes" || container.dataset.loading === "yes") return;
   container.dataset.loading = "yes";
   container.replaceChildren(el("div", { class: "note" }, "Loading history…"));
 
   try {
-    const deployments = await loadHistory(config, result, envName, { signal: controller?.signal });
+    const deployments = await loadHistory(config, result, env.name, { signal: controller?.signal });
+    // loadHistory resolves the workflow and job for every deployment it
+    // returns, including the current one — so the detail panel above can be
+    // completed from it without a request of its own.
+    refreshFacts(box, env.latest, deployments);
     container.replaceChildren(renderHistory(deployments));
     container.dataset.loaded = "yes";
   } catch (err) {
@@ -435,9 +366,9 @@ function renderHistory(deployments) {
     // The job goes on its own line: names like "deploy / terraform apply" need
     // more room than a column can give them.
     if (d.jobName) {
-      item.append(
-        el("div", { class: "job", title: concept(JOB, [d.jobName], d.jobJson) }, d.jobName)
-      );
+      const job = el("div", { class: "job", title: concept(JOB, [d.jobName], d.jobJson) }, d.jobName);
+      if (d.jobDuration) job.append(el("span", { class: "hint" }, ` · ${d.jobDuration}`));
+      item.append(job);
     }
     list.append(item);
   }
@@ -476,6 +407,29 @@ function jobLink(d) {
   if (d.logUrl) return openLink(d.logUrl, "Open the deployment log");
   if (d.shaUrl) return openLink(d.shaUrl, "Open the deployed commit");
   return el("span", { class: "open" });
+}
+
+/** Swap in a fuller detail panel once history has named the workflow and job. */
+function refreshFacts(box, latest, deployments) {
+  if (!latest) return;
+  const enriched =
+    deployments.find((d) => String(d.id) === String(latest.id)) || deployments[0];
+  if (!enriched) return;
+
+  const facts = box.querySelector(".facts");
+  if (facts) facts.replaceWith(renderFacts({ ...latest, ...pickResolved(enriched) }));
+}
+
+/** Only the fields history resolves — never overwrite the current state. */
+function pickResolved(d) {
+  return {
+    workflowName: d.workflowName,
+    jobName: d.jobName,
+    jobUrl: d.jobUrl,
+    jobJson: d.jobJson,
+    jobDuration: d.jobDuration,
+    runUrl: d.runUrl,
+  };
 }
 
 function historyError(err, result) {

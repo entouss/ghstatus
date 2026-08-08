@@ -17,23 +17,18 @@ history:
     ▾ 🟥 staging     ghcr.io/…:2.4.0-rc1           12m ago · @bob
           Status        🟥 Failure          Updated  12m ago
           Triggered by  @bob                Commit   abc1234
-          Workflow      Deploy              Job      deploy (staging)
-          Version       2.4.0-rc1
+          Workflow      Deploy              Job      deploy (staging) · ran 1m 20s
+          Took          4m 12s              Version  2.4.0-rc1
           Image         ghcr.io/my-org/api:2.4.0-rc1
           Description   Automatic deployment from workflow "Deploy" #4821
           Links         View logs · Open environment
 
-          ACTIONS JOBS ↗
-          🟩 build                                            2m 14s
-          🟩 test (unit)                                      4m 03s
-          🟥 deploy (staging) / terraform apply               1m 20s
-
           PAST DEPLOYMENTS
              WORKFLOW                        COMMIT    DEPLOYED
           🟩 Deploy                          9f2e10c   2d ago · @alice ↗
-               deploy (production) / terraform apply
+               deploy (production) / terraform apply · 1m 20s
           🟩 Release and deploy              41ab7c3   6d ago · @alice ↗
-               deploy / terraform apply to staging
+               deploy / terraform apply to staging · 3m 04s
     › ⬜ preview                                  no deployments
 ```
 
@@ -129,12 +124,9 @@ fallback; with no token, only the session is used.
 
 ### Getting to the Actions jobs
 
-Expanding an environment lists the jobs of the workflow run that performed the
-current deployment: name, outcome, how long it took, each linking to its own
-job page. The ↗ beside the heading opens the whole run, and every past
-deployment carries its own ↗ to the run that produced it.
-
-Each **past deployment** links straight to the job that deployed it —
+Every deployment names the **workflow** that produced it and the **job** within
+that workflow run that did the deploying, with how long that job ran. Each
+**past deployment** links straight to the job that deployed it —
 `/actions/runs/<runId>/job/<jobId>`. Runs list several jobs, so the one picked
 is, in order: a job naming the environment, then a failed job if the deployment
 failed, then the last job in the run. Where none can be resolved the row falls
@@ -153,11 +145,10 @@ Seeing *"Open the deployed commit"* on every row means no runs were matched at
 all, which is expected when the deployments come from something other than
 GitHub Actions.
 
-**The jobs list needs a token** — there is no dependable way to read a run's
-jobs out of the rendered page. The *links* do not: GitHub's own **View logs**
-(in each deployment's `...` menu) is a plain anchor on the page, so session mode
-scrapes it and every row still reaches its run or job. In session-only mode the
-jobs list is replaced by a link to the run.
+**Naming the workflow and job needs a token** — there is no dependable way to
+read a run's jobs out of the rendered page. The *links* do not: GitHub's own
+**View logs** (in each deployment's `...` menu) is a plain anchor on the page,
+so session mode scrapes it and every row still reaches its run or job.
 
 If a status names a specific job — which `View logs` usually does — that is used
 as-is, with no lookup at all.
@@ -185,6 +176,11 @@ specific **job** on the line below it — job names like
 `deploy / terraform apply to staging` need more room than a column affords.
 Both come from the jobs already fetched to build the row's link, so neither
 costs an extra request.
+
+**Took** is the deployment's own elapsed time — created until its status
+settled. The **Job** line carries how long that job ran, which is a different
+measurement: a deployment can wait on approval long before its job starts.
+Durations appear wherever both ends of the interval are known.
 
 **Version** and **Image** come from the deployment payload, which is free-form.
 The whole payload is searched, shallowest key first, for the conventional
@@ -241,10 +237,10 @@ src/
   published elsewhere the link can 404. Nested `ghcr.io` paths and third-party
   registries are left unlinked rather than guessed at.
 - The REST path costs 1 + 2N requests per repo (N = environments) for the
-  dashboard. Expanding an environment adds 1 + 10 for history, 1–2 for the jobs
-  list, and — to resolve the past deployments' job links — one per distinct
-  commit whose status named no run, plus one per distinct run found. The cache
-  keeps this in check, and a failed lookup degrades to a wider link rather than
-  failing the history.
-- Jobs are shown for the *current* deployment of an environment. Past
-  deployments link to their run rather than listing its jobs inline.
+  dashboard. Expanding an environment adds 1 + 10 for history and — to resolve
+  the workflow, job and job link — one per distinct commit whose status named
+  no run, plus one per distinct run found. The cache keeps this in check, and a
+  failed lookup degrades to a wider link rather than failing the history.
+- The workflow and job of the *current* deployment are filled in when you
+  expand the environment: they come from the same history fetch, which resolves
+  them for every deployment it returns, so they cost no extra request.
