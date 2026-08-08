@@ -6,7 +6,7 @@ import * as actions from "./github-actions.js";
 import * as api from "./github-api.js";
 import * as html from "./github-html.js";
 import { mostSevere } from "./state.js";
-import { duration, mapLimit } from "./util.js";
+import { mapLimit } from "./util.js";
 
 const CACHE_KEY = "cache";
 const HISTORY_KEY = "historyCache";
@@ -154,7 +154,8 @@ async function attachJobLinks(config, result, deployments, { signal }) {
     deployment.jobName = job?.name || null;
     deployment.workflowName = job?.workflowName || deployment.workflowName || null;
     deployment.jobJson = job?.rawJson || null;
-    deployment.jobDuration = duration(job?.startedAt, job?.completedAt) || null;
+    deployment.jobStartedAt = job?.startedAt || null;
+    deployment.jobCompletedAt = job?.completedAt || null;
   }
 }
 

@@ -46,12 +46,20 @@ export function formatDate(value) {
   return date.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
 }
 
+/** Milliseconds between two timestamps, or 0 when that cannot be known. */
+export function durationMs(from, to) {
+  if (!from || !to) return 0;
+  const ms = new Date(to).getTime() - new Date(from).getTime();
+  return Number.isFinite(ms) && ms > 0 ? ms : 0;
+}
+
 /** Elapsed time between two timestamps, as "45s" / "3m 12s" / "1h 04m". */
 export function duration(from, to) {
-  if (!from || !to) return "";
-  const ms = new Date(to).getTime() - new Date(from).getTime();
-  if (!Number.isFinite(ms) || ms < 0) return "";
+  const ms = durationMs(from, to);
+  return ms ? formatDuration(ms) : "";
+}
 
+export function formatDuration(ms) {
   const seconds = Math.round(ms / 1000);
   if (seconds < 60) return `${seconds}s`;
 

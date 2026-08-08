@@ -2,7 +2,7 @@ import { loadConfig, deploymentsUrl, environmentUrl, webBase } from "./lib/confi
 import { loadAll, loadHistory, orderedRepos, readCache, HISTORY_LIMIT } from "./lib/loader.js";
 import { deploymentSubtitle } from "./lib/deployment.js";
 import { EMOJI, BUCKET_LABEL, stateLabel } from "./lib/state.js";
-import { timeAgo, duration, formatDate, shortSha } from "./lib/util.js";
+import { timeAgo, duration, durationMs, formatDuration, formatDate, shortSha } from "./lib/util.js";
 
 const reposEl = document.getElementById("repos");
 const emptyEl = document.getElementById("empty");
@@ -242,9 +242,11 @@ function renderFacts(d) {
   addFact(dl, "Updated", d.updatedAt ? absolute(d.updatedAt) : null);
   addFact(dl, "Triggered by", d.actor ? maybeLink(d.actorUrl, `@${d.actor}`) : null);
   addFact(dl, "Commit", d.sha ? maybeLink(d.shaUrl, shortSha(d.sha), "mono") : null);
-  addFact(dl, "Workflow", d.workflowName || null);
-  addFact(dl, "Job", jobFact(d));
   addFact(dl, "Took", deployDuration(d));
+  // A workflow name and a job name are both long and unrelated to each other,
+  // so neither shares a row.
+  addFact(dl, "Workflow", d.workflowName || null, true);
+  addFact(dl, "Job", jobFact(d), true);
   addFact(dl, "Version", d.version ? maybeLink(d.versionUrl, d.version, "mono") : null);
   // These three run long, so they take a row to themselves.
   addFact(dl, "Image", d.image ? maybeLink(d.imageUrl, d.image, "mono wrap") : null, true);
@@ -263,7 +265,8 @@ function renderFacts(d) {
 function jobFact(d) {
   if (!d.jobName) return null;
   const span = el("span", {}, maybeLink(d.jobUrl, d.jobName, ""));
-  if (d.jobDuration) span.append(el("span", { class: "hint" }, ` · ran ${d.jobDuration}`));
+  const ran = duration(d.jobStartedAt, d.jobCompletedAt);
+  if (ran) span.append(el("span", { class: "hint" }, ` · ${ran}`));
   return span;
 }
 
@@ -343,6 +346,13 @@ function renderHistory(deployments) {
     return wrap;
   }
 
+  // Bars compare against the slowest job among the deployments we fetched, so
+  // the scale is "the last 10", not the handful shown below the current one.
+  const slowest = Math.max(
+    0,
+    ...deployments.map((d) => durationMs(d.jobStartedAt, d.jobCompletedAt))
+  );
+
   const list = el("ul", { class: "row-list" });
   list.append(historyHeader());
 
@@ -351,8 +361,6 @@ function renderHistory(deployments) {
     item.append(
       el("div", { class: "row" },
         el("span", { class: "dot" }, EMOJI[d.bucket]),
-        el("span", { class: "workflow", title: concept(WORKFLOW, [d.workflowName], d.jobJson) },
-          d.workflowName || ""),
         el("span", { class: "grow" }),
         d.sha
           ? link(d.shaUrl, shortSha(d.sha), "sha mono", concept(COMMIT, [d.sha]))
@@ -365,9 +373,20 @@ function renderHistory(deployments) {
     );
     // The job goes on its own line: names like "deploy / terraform apply" need
     // more room than a column can give them.
+    if (d.workflowName) {
+      item.append(
+        el("div", { class: "workflow-line", title: concept(WORKFLOW, [d.workflowName], d.jobJson) },
+          d.workflowName)
+      );
+    }
     if (d.jobName) {
-      const job = el("div", { class: "job", title: concept(JOB, [d.jobName], d.jobJson) }, d.jobName);
-      if (d.jobDuration) job.append(el("span", { class: "hint" }, ` · ${d.jobDuration}`));
+      const job = el("div", { class: "job", title: concept(JOB, [d.jobName], d.jobJson) });
+      job.append(el("span", { class: "job-label" }, d.jobName));
+      const ms = durationMs(d.jobStartedAt, d.jobCompletedAt);
+      if (ms) {
+        job.append(el("span", { class: "hint" }, formatDuration(ms)));
+        job.append(durationBar(ms, slowest));
+      }
       item.append(job);
     }
     list.append(item);
@@ -386,7 +405,7 @@ function historyHeader() {
   head.append(
     el("div", { class: "row" },
       el("span", { class: "dot" }),
-      el("span", { class: "workflow" }, "Workflow"),
+      el("span", { class: "deployment-head" }, "Deployment"),
       el("span", { class: "grow" }),
       el("span", { class: "sha" }, "Commit"),
       el("span", { class: "meta" }, "Deployed"),
@@ -427,9 +446,27 @@ function pickResolved(d) {
     jobName: d.jobName,
     jobUrl: d.jobUrl,
     jobJson: d.jobJson,
-    jobDuration: d.jobDuration,
+    jobStartedAt: d.jobStartedAt,
+    jobCompletedAt: d.jobCompletedAt,
     runUrl: d.runUrl,
   };
+}
+
+/**
+ * How this job's duration compares with the slowest of the last 10. A bar
+ * makes an outlier obvious in a way a column of times does not.
+ */
+function durationBar(ms, slowest) {
+  const share = slowest > 0 ? ms / slowest : 0;
+  const track = el("span", {
+    class: "bar",
+    title: `${formatDuration(ms)} — ${Math.round(share * 100)}% of the slowest of the last ${HISTORY_LIMIT} (${formatDuration(slowest)})`,
+  });
+  const fill = el("span", { class: "bar-fill" });
+  // A floor keeps a very fast job from rendering as an invisible sliver.
+  fill.style.width = `${Math.max(3, share * 100).toFixed(1)}%`;
+  track.append(fill);
+  return track;
 }
 
 function historyError(err, result) {

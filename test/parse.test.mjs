@@ -15,7 +15,7 @@ import {
   imageUrl,
 } from "../src/lib/deployment.js";
 import { parseRepo, environmentUrl } from "../src/lib/config.js";
-import { mapLimit, timeAgo, duration, shortSha } from "../src/lib/util.js";
+import { mapLimit, timeAgo, duration, durationMs, shortSha } from "../src/lib/util.js";
 import {
   runIdFromUrl,
   jobBucket,
@@ -553,6 +553,14 @@ test("duration reads at a glance", () => {
   // A job still running has no end, and clock skew must not print nonsense.
   assert.equal(t("2026-08-05T09:00:00Z", null), "");
   assert.equal(t("2026-08-05T09:05:00Z", "2026-08-05T09:00:00Z"), "");
+});
+
+test("durationMs gives the number the comparison bars need", () => {
+  assert.equal(durationMs("2026-08-05T09:00:00Z", "2026-08-05T09:03:20Z"), 200000);
+  // Zero, not NaN or a negative: the bar maths divides by these.
+  assert.equal(durationMs("2026-08-05T09:00:00Z", null), 0);
+  assert.equal(durationMs("2026-08-05T09:05:00Z", "2026-08-05T09:00:00Z"), 0);
+  assert.equal(durationMs(null, null), 0);
 });
 
 test("shortSha trims to the usual seven", () => {

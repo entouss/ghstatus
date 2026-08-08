@@ -259,7 +259,7 @@ summary:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; 
   background: var(--surface-2);
 }
 .history-row.head:hover { background: var(--surface-2); }
-.history-row.head .workflow,
+.history-row.head .deployment-head,
 .history-row.head .sha,
 .history-row.head .meta {
   font-family: inherit;
@@ -270,22 +270,55 @@ summary:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; 
 /* Commit and meta are fixed-width right-hand columns so they line up down the
    list. Fixed rather than content-sized: a long actor name would otherwise
    shunt everything to its left out of alignment. */
-.workflow {
+.deployment-head { flex: 0 1 auto; }
+
+/* Workflow and job each take a line of their own beneath the row: names like
+   "deploy / terraform apply to staging" never fit a column. Both are indented
+   to clear the status dot on the first line. */
+.workflow-line,
+.job {
+  margin-left: 20px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workflow-line { font-size: 12px; }
+
+.job {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--muted);
+  overflow: visible;
+}
+
+.job-label {
   flex: 0 1 auto;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-/* The job name takes a line of its own — "deploy / terraform apply to staging"
-   never fits a column. Indented to clear the status dot on the line above. */
-.job {
-  margin-left: 20px;
-  font-size: 11px;
-  color: var(--muted);
+.job .hint { flex: none; }
+
+/* How long this job ran against the slowest of the ten fetched. */
+.bar {
+  flex: none;
+  width: 90px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--border);
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+}
+
+.bar-fill {
+  display: block;
+  height: 100%;
+  border-radius: 2px;
+  background: var(--accent);
+  opacity: 0.65;
 }
 
 .sha {

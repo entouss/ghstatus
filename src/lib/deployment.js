@@ -36,7 +36,8 @@ import { shortSha, toJsonSnippet } from "./util.js";
  * @property {string|null} workflowName the workflow the run belongs to
  * @property {boolean} superseded    a later deployment replaced this one
  * @property {string|null} rawJson   the API objects behind it, for the tooltip
- * @property {string|null} jobDuration how long the deploying job ran
+ * @property {string|null} jobStartedAt  when the deploying job began
+ * @property {string|null} jobCompletedAt when it finished
  */
 
 export function emptyDeployment(overrides = {}) {
@@ -70,7 +71,8 @@ export function emptyDeployment(overrides = {}) {
     superseded: false,
     rawJson: null,
     jobJson: null,
-    jobDuration: null,
+    jobStartedAt: null,
+    jobCompletedAt: null,
     ...overrides,
   };
 }

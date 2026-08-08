@@ -17,18 +17,21 @@ history:
     ▾ 🟥 staging     ghcr.io/…:2.4.0-rc1           12m ago · @bob
           Status        🟥 Failure          Updated  12m ago
           Triggered by  @bob                Commit   abc1234
-          Workflow      Deploy              Job      deploy (staging) · ran 1m 20s
           Took          4m 12s              Version  2.4.0-rc1
+          Workflow      Release and deploy to environment
+          Job           deploy (staging) / terraform apply · 1m 20s
           Image         ghcr.io/my-org/api:2.4.0-rc1
           Description   Automatic deployment from workflow "Deploy" #4821
           Links         View logs · Open environment
 
           PAST DEPLOYMENTS
-             WORKFLOW                        COMMIT    DEPLOYED
-          🟩 Deploy                          9f2e10c   2d ago · @alice ↗
-               deploy (production) / terraform apply · 1m 20s
-          🟩 Release and deploy              41ab7c3   6d ago · @alice ↗
-               deploy / terraform apply to staging · 3m 04s
+             DEPLOYMENT                      COMMIT    DEPLOYED
+          🟩                                 9f2e10c   2d ago · @alice ↗
+             Deploy
+             deploy (production)   1m 20s  ▓▓▓▓▓░░░░░
+          🟩                                 41ab7c3   6d ago · @alice ↗
+             Release and deploy to environment
+             deploy / terraform apply   3m 04s  ▓▓▓▓▓▓▓▓▓▓
     › ⬜ preview                                  no deployments
 ```
 
@@ -180,7 +183,13 @@ costs an extra request.
 **Took** is the deployment's own elapsed time — created until its status
 settled. The **Job** line carries how long that job ran, which is a different
 measurement: a deployment can wait on approval long before its job starts.
-Durations appear wherever both ends of the interval are known.
+Durations appear wherever both ends of the interval are known; a job still
+running has no end and shows none.
+
+Each past deployment's job duration carries a **bar comparing it against the
+slowest of the ten fetched**, so a run that took three times as long as usual
+is visible without reading the numbers. The bar's tooltip gives the percentage
+and what it is being compared with.
 
 **Version** and **Image** come from the deployment payload, which is free-form.
 The whole payload is searched, shallowest key first, for the conventional
