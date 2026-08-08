@@ -131,12 +131,16 @@ export function pickDeployJob(jobs, deployment = {}) {
  */
 export async function fetchRecentRuns(config, owner, repo, { signal } = {}) {
   const data = await api(config, `/repos/${owner}/${repo}/actions/runs?per_page=100`, { signal });
-  return (data.workflow_runs || []).map((run) => ({
+  return (data.workflow_runs || []).map(normalizeRun);
+}
+
+function normalizeRun(run) {
+  return {
     id: String(run.id),
     workflowName: run.name || null,
     headSha: run.head_sha || null,
     displayTitle: run.display_title || null,
-  }));
+  };
 }
 
 /**
@@ -170,16 +174,8 @@ export async function findRun(config, owner, repo, deployment, { signal } = {}) 
 
   const query = new URLSearchParams({ head_sha: deployment.sha, per_page: "20" });
   const data = await api(config, `/repos/${owner}/${repo}/actions/runs?${query}`, { signal });
-  const runs = data.workflow_runs || [];
-  if (!runs.length) return null;
-
-  const environment = deployment.environment;
-  const match =
-    (environment &&
-      runs.find((r) =>
-        `${r.name || ""} ${r.display_title || ""}`.toLowerCase().includes(environment.toLowerCase())
-      )) ||
-    runs[0];
-  return { id: String(match.id), workflowName: match.name || null };
+  // Same selection rule as the dashboard's bulk lookup, so the two paths
+  // cannot disagree about which run deployed.
+  return pickRunForDeployment((data.workflow_runs || []).map(normalizeRun), deployment);
 }
 

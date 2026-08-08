@@ -113,7 +113,12 @@ async function attachWorkflowNames(config, owner, repo, environments, { signal }
 
   const base = `${webBase(config)}/${owner}/${repo}`;
   for (const env of needing) {
-    const run = actions.pickRunForDeployment(runs, env.latest);
+    // When the deployment already names its run, that run is the answer.
+    // Matching by commit instead can land on a CI run that merely shares the
+    // sha, which is then contradicted the moment the environment is expanded.
+    const run = env.latest.runId
+      ? runs.find((candidate) => candidate.id === env.latest.runId) || null
+      : actions.pickRunForDeployment(runs, env.latest);
     if (!run) continue;
     env.latest.workflowName = run.workflowName;
     if (!env.latest.runId) {

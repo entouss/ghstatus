@@ -444,6 +444,18 @@ test("pickRunForDeployment matches on commit, then on the environment", () => {
   assert.equal(pickRunForDeployment(runs, {}), null);
 });
 
+test("a run the deployment already names is not re-guessed by commit", () => {
+  // Two runs on one commit: the deploy, and a CI run that merely shares it.
+  const runs = [
+    { id: "9", workflowName: "CI", headSha: "aaa", displayTitle: "" },
+    { id: "7", workflowName: "Deploy", headSha: "aaa", displayTitle: "" },
+  ];
+  // Guessing by commit alone picks the wrong one here, which is exactly the
+  // disagreement the runId lookup avoids.
+  assert.equal(pickRunForDeployment(runs, { sha: "aaa" }).id, "9");
+  assert.equal(runs.find((r) => r.id === "7").workflowName, "Deploy");
+});
+
 test("permissionFor names the permission each endpoint needs", () => {
   assert.equal(permissionFor("/repos/o/r/environments"), "Environments: Read-only");
   assert.equal(permissionFor("/repos/o/r/deployments?environment=prod"), "Deployments: Read-only");

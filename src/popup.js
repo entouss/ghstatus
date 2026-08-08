@@ -455,8 +455,30 @@ function refreshFacts(box, latest, deployments) {
     deployments.find((d) => String(d.id) === String(latest.id)) || deployments[0];
   if (!enriched) return;
 
+  const merged = { ...latest, ...pickResolved(enriched) };
   const facts = box.querySelector(".facts");
-  if (facts) facts.replaceWith(renderFacts({ ...latest, ...pickResolved(enriched) }));
+  if (facts) facts.replaceWith(renderFacts(merged));
+  // The summary above shows the same workflow name; leaving it stale is how
+  // the collapsed row ends up contradicting the panel below it.
+  setEnvWorkflow(box, merged);
+}
+
+/** Keep the environment row's workflow line in step with what we now know. */
+function setEnvWorkflow(box, d) {
+  const summary = box.querySelector("summary");
+  if (!summary) return;
+
+  const existing = summary.querySelector(".env-workflow");
+  if (!d.workflowName) {
+    existing?.remove();
+    return;
+  }
+
+  const line =
+    existing ||
+    summary.appendChild(el("div", { class: "workflow-line env-workflow" }));
+  line.textContent = d.workflowName;
+  line.title = concept(WORKFLOW, [d.workflowName], d.jobJson);
 }
 
 /** Only the fields history resolves — never overwrite the current state. */
