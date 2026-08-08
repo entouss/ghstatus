@@ -75,8 +75,16 @@ async function loadRepo(config, owner, repo, { signal }) {
     try {
       const environments = await client(source).fetchRepoEnvironments(config, owner, repo, { signal });
       environments.sort((a, b) => a.name.localeCompare(b.name));
-      await attachWorkflowNames(config, owner, repo, environments, { signal });
-      return { ...base, source, environments, ...rollUp(environments), error: null, errorHint: null };
+      const workflows = await loadActions(config, owner, repo, environments, { signal });
+      return {
+        ...base,
+        source,
+        environments,
+        workflows,
+        ...rollUp(environments),
+        error: null,
+        errorHint: null,
+      };
     } catch (err) {
       if (err?.name === "AbortError") throw err;
       lastError = err;
@@ -95,39 +103,44 @@ async function loadRepo(config, owner, repo, { signal }) {
 }
 
 /**
- * Name the workflow behind each environment's current deployment, so the
- * dashboard shows it without expanding. One request for the repo's recent
- * runs covers every environment; best effort, since it is decoration.
+ * One request for the repo's recent runs, serving two purposes: naming the
+ * workflow behind each environment's current deployment, and listing every
+ * workflow with its latest run. Best effort — both are decoration, and a
+ * failure here must not cost us the deployments.
+ * @returns {Promise<object[]>} one entry per workflow, most recent first
  */
-async function attachWorkflowNames(config, owner, repo, environments, { signal }) {
-  if (!config.token) return;
-
-  const needing = environments.filter((env) => env.latest?.sha && !env.latest.workflowName);
-  if (!needing.length) return;
+async function loadActions(config, owner, repo, environments, { signal }) {
+  if (!config.token) return [];
 
   let runs;
   try {
     runs = await actions.fetchRecentRuns(config, owner, repo, { signal });
   } catch (err) {
     if (err?.name === "AbortError") throw err;
-    return;
+    return [];
   }
 
   const base = `${webBase(config)}/${owner}/${repo}`;
-  for (const env of needing) {
+  for (const env of environments) {
+    const latest = env.latest;
+    if (!latest?.sha || latest.workflowName) continue;
+
     // When the deployment already names its run, that run is the answer.
     // Matching by commit instead can land on a CI run that merely shares the
     // sha, which is then contradicted the moment the environment is expanded.
-    const run = env.latest.runId
-      ? runs.find((candidate) => candidate.id === env.latest.runId) || null
-      : actions.pickRunForDeployment(runs, env.latest);
+    const run = latest.runId
+      ? runs.find((candidate) => candidate.id === latest.runId) || null
+      : actions.pickRunForDeployment(runs, latest);
     if (!run) continue;
-    env.latest.workflowName = run.workflowName;
-    if (!env.latest.runId) {
-      env.latest.runId = run.id;
-      env.latest.runUrl = `${base}/actions/runs/${run.id}`;
+
+    latest.workflowName = run.workflowName;
+    if (!latest.runId) {
+      latest.runId = run.id;
+      latest.runUrl = `${base}/actions/runs/${run.id}`;
     }
   }
+
+  return actions.summariseWorkflows(runs);
 }
 
 /**

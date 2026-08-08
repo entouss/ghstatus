@@ -16,6 +16,7 @@ history:
 
 ```
 ▾ 🟥 my-org/api                                    3 envs · 12m ago
+    › ACTIONS                                        4 workflows
     › 🟩 production  v2.3.1              2h ago · @alice   9f2e10c
          Deploy
     ▾ 🟥 staging     ghcr.io/…:2.4.0-rc1  12m ago · @bob    abc1234
@@ -30,8 +31,8 @@ history:
           Links         View logs · Open environment
 
           PAST DEPLOYMENTS
-             DEPLOYMENT                    DEPLOYED            COMMIT
-          🟩                               2d ago · @alice  ↗  9f2e10c
+             DEPLOYMENT                    DEPLOYED     COMMIT
+          🟩                               2d ago · @alice  9f2e10c ↗
              Deploy
              deploy (production)   1m 20s  ▓▓▓▓▓░░░░░
           🟩                               6d ago · @alice  ↗  41ab7c3
@@ -154,6 +155,9 @@ fallback; with no token, only the session is used.
   environment: the repo's recent runs are fetched once and matched to each
   environment's deployment by commit, preferring a run that names the
   environment.
+- Each repo lists its **Actions** — every workflow with its latest run, what
+  triggered it and how it ended — above the environments, collapsed by
+  default. This reuses the same recent-runs request, so it is free.
 - Failures are reported per repo, so one bad repo doesn't blank the dashboard.
 
 ### Getting to the Actions jobs

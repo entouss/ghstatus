@@ -138,10 +138,55 @@ export async function fetchRecentRuns(config, owner, repo, { signal } = {}) {
 function normalizeRun(run) {
   return {
     id: String(run.id),
+    workflowId: run.workflow_id ? String(run.workflow_id) : null,
     workflowName: run.name || null,
     headSha: run.head_sha || null,
     displayTitle: run.display_title || null,
+    status: run.status || null,
+    conclusion: run.conclusion || null,
+    event: run.event || null,
+    headBranch: run.head_branch || null,
+    createdAt: run.created_at || null,
+    updatedAt: run.updated_at || null,
+    url: run.html_url || null,
+    bucket: runBucket(run),
+    rawJson: runJson(run),
   };
+}
+
+/** A run carries the same status/conclusion pair a job does. */
+export const runBucket = jobBucket;
+
+function runJson(run) {
+  return toJsonSnippet({
+    run: {
+      id: run.id,
+      name: run.name,
+      workflow_id: run.workflow_id,
+      event: run.event,
+      status: run.status,
+      conclusion: run.conclusion,
+      head_branch: run.head_branch,
+      head_sha: run.head_sha,
+      run_number: run.run_number,
+      created_at: run.created_at,
+    },
+  });
+}
+
+/**
+ * One entry per workflow: its most recent run. The runs endpoint returns
+ * newest first, so the first sighting of a workflow is its latest run, and
+ * the result stays ordered by how recently each workflow ran.
+ */
+export function summariseWorkflows(runs) {
+  const latest = new Map();
+  for (const run of runs) {
+    const key = run.workflowId || run.workflowName;
+    if (!key || latest.has(key)) continue;
+    latest.set(key, run);
+  }
+  return [...latest.values()];
 }
 
 /**

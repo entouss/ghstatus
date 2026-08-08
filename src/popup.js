@@ -183,6 +183,8 @@ function renderRepo(repo, result) {
   } else if (!envCount) {
     body.append(el("div", { class: "note" }, "No environments"));
   } else {
+    const actions = renderActions(result);
+    if (actions) body.append(actions);
     for (const env of result.environments) body.append(renderEnv(result, env));
   }
   box.append(body);
@@ -217,6 +219,55 @@ function repoMeta(result, envCount) {
   return parts.join(" · ");
 }
 
+/**
+ * The repo's workflows, each with its latest run. Collapsed by default: this
+ * is context for the deployments below it, not the thing you came to see.
+ */
+function renderActions(result) {
+  const workflows = result.workflows || [];
+  if (!workflows.length) return null;
+
+  const key = `${result.key}#actions`;
+  const box = el("details", { class: "actions-list" });
+  if (isOpen(key)) box.open = true;
+  box.addEventListener("toggle", () => setOpen(key, box.open));
+
+  const summary = el("summary", { class: "row section-toggle" });
+  summary.append(
+    chevron(),
+    el("span", {}, "Actions"),
+    el("span", { class: "grow" }),
+    el("span", { class: "meta" }, `${workflows.length} workflow${workflows.length === 1 ? "" : "s"}`)
+  );
+  box.append(summary);
+
+  const list = el("ul", { class: "row-list" });
+  for (const run of workflows) {
+    const item = el("li", { class: "row action-row", title: runTooltip(run) });
+    item.append(
+      el("span", { class: "dot" }, EMOJI[run.bucket] || EMOJI.idle),
+      el("span", { class: "action-name" }, run.workflowName || "Unnamed workflow"),
+      el("span", { class: "grow" }),
+      el("span", { class: "meta" }, [run.event, timeAgo(run.createdAt)].filter(Boolean).join(" · ")),
+      run.url ? openLink(run.url, "Open this workflow's latest run") : el("span", { class: "open" })
+    );
+    list.append(item);
+  }
+  box.append(list);
+  return box;
+}
+
+function runTooltip(run) {
+  const lines = [
+    `Workflow: ${run.workflowName || "unnamed"}`,
+    `Status: ${stateLabel(run.status)} — where the run is in its lifecycle`,
+    `Conclusion: ${run.conclusion ? stateLabel(run.conclusion) : "not finished yet"} — how it ended`,
+  ];
+  if (run.event) lines.push(`Triggered by: ${run.event}`);
+  if (run.createdAt) lines.push(`Started: ${formatDate(run.createdAt)}`);
+  return concept("WORKFLOW RUN — one execution of a workflow", lines, run.rawJson);
+}
+
 // --- environment level -----------------------------------------------------
 
 function renderEnv(result, env) {
@@ -242,15 +293,15 @@ function renderEnv(result, env) {
     subtitle ? el("span", { class: "tag" }, subtitle) : "",
     el("span", { class: "grow" }),
     el("span", { class: "meta" }, envMeta(latest)),
+    // Its own column, so commits line up down the environments instead of
+    // trailing their names — but inside the link, which keeps the edge.
+    latest?.sha
+      ? link(latest.shaUrl, shortSha(latest.sha), "sha mono", concept(COMMIT, [latest.sha]))
+      : el("span", { class: "sha mono" }),
     openLink(
       environmentUrl(config, result.owner, result.repo, env.name),
       "Open this environment's latest deployment"
-    ),
-    // Same right-hand column as the history table below, so commits line up
-    // down the environments instead of trailing their names.
-    latest?.sha
-      ? link(latest.shaUrl, shortSha(latest.sha), "sha mono", concept(COMMIT, [latest.sha]))
-      : el("span", { class: "sha mono" })
+    )
   );
   summary.append(line);
 
@@ -449,12 +500,12 @@ function renderHistory(deployments) {
         el("span", { class: "dot" }, EMOJI[d.bucket]),
         el("span", { class: "grow" }),
         el("span", { class: "meta" }, envMeta(d)),
-        // Straight to the job that deployed, falling back to the whole run when
-        // we could not resolve one.
-        jobLink(d),
         d.sha
           ? link(d.shaUrl, shortSha(d.sha), "sha mono", concept(COMMIT, [d.sha]))
-          : el("span", { class: "sha mono" }, "—")
+          : el("span", { class: "sha mono" }, "—"),
+        // Straight to the job that deployed, falling back to the whole run when
+        // we could not resolve one.
+        jobLink(d)
       )
     );
     // The job goes on its own line: names like "deploy / terraform apply" need
@@ -494,8 +545,8 @@ function historyHeader() {
       el("span", { class: "deployment-head" }, "Deployment"),
       el("span", { class: "grow" }),
       el("span", { class: "meta" }, "Deployed"),
-      el("span", { class: "open" }),
-      el("span", { class: "sha" }, "Commit")
+      el("span", { class: "sha" }, "Commit"),
+      el("span", { class: "open" })
     )
   );
   return head;

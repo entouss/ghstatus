@@ -28,6 +28,7 @@ import {
   describeJob,
   pickDeployJob,
   pickRunForDeployment,
+  summariseWorkflows,
 } from "../src/lib/github-actions.js";
 import { ApiError, permissionFor, permissionHint } from "../src/lib/rest.js";
 
@@ -469,6 +470,31 @@ test("a run the deployment already names is not re-guessed by commit", () => {
   // disagreement the runId lookup avoids.
   assert.equal(pickRunForDeployment(runs, { sha: "aaa" }).id, "9");
   assert.equal(runs.find((r) => r.id === "7").workflowName, "Deploy");
+});
+
+test("summariseWorkflows keeps each workflow's latest run", () => {
+  // The runs endpoint returns newest first, so first sighting wins.
+  const runs = [
+    { workflowId: "1", workflowName: "Deploy", id: "300" },
+    { workflowId: "2", workflowName: "CI", id: "299" },
+    { workflowId: "1", workflowName: "Deploy", id: "250" },
+    { workflowId: "2", workflowName: "CI", id: "240" },
+  ];
+  assert.deepEqual(
+    summariseWorkflows(runs).map((r) => [r.workflowName, r.id]),
+    [["Deploy", "300"], ["CI", "299"]]
+  );
+});
+
+test("summariseWorkflows falls back to the name when there is no id", () => {
+  const runs = [
+    { workflowId: null, workflowName: "Deploy", id: "2" },
+    { workflowId: null, workflowName: "Deploy", id: "1" },
+    { workflowId: null, workflowName: null, id: "0" },
+  ];
+  // The unnamed, unidentified run is not a workflow we can list.
+  assert.deepEqual(summariseWorkflows(runs).map((r) => r.id), ["2"]);
+  assert.deepEqual(summariseWorkflows([]), []);
 });
 
 test("permissionFor names the permission each endpoint needs", () => {
