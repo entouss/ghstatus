@@ -444,12 +444,12 @@ function renderHistory(deployments) {
         el("span", { class: "dot" }, EMOJI[d.bucket]),
         el("span", { class: "grow" }),
         el("span", { class: "meta" }, envMeta(d)),
-        d.sha
-          ? link(d.shaUrl, shortSha(d.sha), "sha mono", concept(COMMIT, [d.sha]))
-          : el("span", { class: "sha mono" }, "—"),
         // Straight to the job that deployed, falling back to the whole run when
         // we could not resolve one.
-        jobLink(d)
+        jobLink(d),
+        d.sha
+          ? link(d.shaUrl, shortSha(d.sha), "sha mono", concept(COMMIT, [d.sha]))
+          : el("span", { class: "sha mono" }, "—")
       )
     );
     // The job goes on its own line: names like "deploy / terraform apply" need
@@ -489,8 +489,8 @@ function historyHeader() {
       el("span", { class: "deployment-head" }, "Deployment"),
       el("span", { class: "grow" }),
       el("span", { class: "meta" }, "Deployed"),
-      el("span", { class: "sha" }, "Commit"),
-      el("span", { class: "open" })
+      el("span", { class: "open" }),
+      el("span", { class: "sha" }, "Commit")
     )
   );
   return head;

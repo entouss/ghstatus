@@ -30,11 +30,11 @@ history:
           Links         View logs · Open environment
 
           PAST DEPLOYMENTS
-             DEPLOYMENT                    DEPLOYED          COMMIT
-          🟩                               2d ago · @alice   9f2e10c ↗
+             DEPLOYMENT                    DEPLOYED            COMMIT
+          🟩                               2d ago · @alice  ↗  9f2e10c
              Deploy
              deploy (production)   1m 20s  ▓▓▓▓▓░░░░░
-          🟩                               6d ago · @alice   41ab7c3 ↗
+          🟩                               6d ago · @alice  ↗  41ab7c3
              Release and deploy to environment
              deploy / terraform apply   3m 04s  ▓▓▓▓▓▓▓▓▓▓
     › ⬜ preview                                  no deployments
