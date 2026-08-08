@@ -120,7 +120,7 @@ a:hover { text-decoration: underline; }
   text-align: center;
   transition: transform 0.12s ease;
 }
-details[open] > summary > .chev { transform: rotate(90deg); }
+details[open] > summary .chev { transform: rotate(90deg); }
 
 summary { list-style: none; cursor: pointer; }
 summary::-webkit-details-marker { display: none; }
@@ -284,6 +284,13 @@ summary:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; 
 }
 
 .workflow-line { font-size: 12px; }
+
+/* Indented to sit under the environment name, clearing chevron and dot. */
+.env-workflow {
+  margin-left: 36px;
+  font-size: 11px;
+  color: var(--muted);
+}
 
 .job {
   display: flex;

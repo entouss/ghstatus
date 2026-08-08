@@ -1,5 +1,6 @@
 import { loadConfig, saveConfig, parseRepo, ensureHostPermission } from "./lib/config.js";
 import { checkToken } from "./lib/github-api.js";
+import { permissionHint } from "./lib/rest.js";
 
 const fields = {
   repos: document.getElementById("repos"),
@@ -68,7 +69,8 @@ async function test() {
     const login = await checkToken(next);
     note(tokenResultEl, `Token works — signed in as ${login}`, "ok");
   } catch (err) {
-    note(tokenResultEl, err.message || "Token check failed", "error");
+    const hint = permissionHint(err);
+    note(tokenResultEl, [err.message || "Token check failed", hint].filter(Boolean).join(" "), "error");
   }
 }
 

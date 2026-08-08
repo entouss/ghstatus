@@ -116,7 +116,9 @@ function renderRepo(repo, result) {
   if (!result) {
     body.append(el("div", { class: "note" }, "Loading…"));
   } else if (result.error) {
-    body.append(el("div", { class: "note error" }, result.error));
+    body.append(
+      el("div", { class: "note error", title: errorTooltip(result) }, result.error)
+    );
   } else if (!envCount) {
     body.append(el("div", { class: "note" }, "No environments"));
   } else {
@@ -132,8 +134,14 @@ function repoLabel(repo) {
   return name;
 }
 
+/** The failure, plus what to change about the token when that is the cause. */
+function errorTooltip(result) {
+  return [result.error, result.errorHint].filter(Boolean).join("\n\n");
+}
+
 function repoTooltip(result, envCount) {
   if (!result) return "Loading…";
+  if (result.error) return errorTooltip(result);
   return concept("REPOSITORY", [
     `Rolled up from ${envCount} environment${envCount === 1 ? "" : "s"}:`,
     `the worst state among them is ${BUCKET_LABEL[result.bucket]}.`,
@@ -162,9 +170,10 @@ function renderEnv(result, env) {
     if (box.open) fillDetails(box, result, env);
   });
 
-  const summary = el("summary", { class: "row env-row" });
+  const summary = el("summary", { class: "env-row" });
   const subtitle = latest ? deploymentSubtitle(latest) : null;
-  summary.append(
+  const line = el("div", { class: "row" });
+  line.append(
     chevron(),
     el("span", { class: "dot", title: stateTooltip(latest) }, EMOJI[bucket]),
     el("span", { class: "env-name", title: concept(ENVIRONMENT, [env.name], env.rawJson) },
@@ -177,6 +186,17 @@ function renderEnv(result, env) {
       "Open this environment's latest deployment"
     )
   );
+  summary.append(line);
+
+  // The workflow that deployed, visible without expanding the environment.
+  if (latest?.workflowName) {
+    summary.append(
+      el("div", {
+        class: "workflow-line env-workflow",
+        title: concept(WORKFLOW, [latest.workflowName], latest.jobJson),
+      }, latest.workflowName)
+    );
+  }
   box.append(summary);
 
   const body = el("div", { class: "body" });

@@ -21,7 +21,9 @@ import {
   jobBucket,
   describeJob,
   pickDeployJob,
+  pickRunForDeployment,
 } from "../src/lib/github-actions.js";
+import { ApiError, permissionFor, permissionHint } from "../src/lib/rest.js";
 
 const REPO_URL = "https://github.com/my-org/api";
 
@@ -423,6 +425,45 @@ test("pickDeployJob finds the job a deployment row should open", () => {
 
   assert.equal(pickDeployJob([], { environment: "production" }), null);
   assert.equal(pickDeployJob(undefined), null);
+});
+
+test("pickRunForDeployment matches on commit, then on the environment", () => {
+  const runs = [
+    { id: "1", workflowName: "CI", headSha: "aaa", displayTitle: "tests" },
+    { id: "2", workflowName: "Deploy to staging", headSha: "aaa", displayTitle: "" },
+    { id: "3", workflowName: "Deploy", headSha: "bbb", displayTitle: "" },
+  ];
+
+  // Naming the environment wins over merely sharing the commit.
+  assert.equal(pickRunForDeployment(runs, { sha: "aaa", environment: "staging" }).id, "2");
+  // With nothing to disambiguate, the first run on that commit.
+  assert.equal(pickRunForDeployment(runs, { sha: "aaa" }).id, "1");
+  assert.equal(pickRunForDeployment(runs, { sha: "bbb", environment: "prod" }).id, "3");
+  // A commit no run touched, and a deployment with no commit at all.
+  assert.equal(pickRunForDeployment(runs, { sha: "zzz" }), null);
+  assert.equal(pickRunForDeployment(runs, {}), null);
+});
+
+test("permissionFor names the permission each endpoint needs", () => {
+  assert.equal(permissionFor("/repos/o/r/environments"), "Environments: Read-only");
+  assert.equal(permissionFor("/repos/o/r/deployments?environment=prod"), "Deployments: Read-only");
+  assert.equal(permissionFor("/repos/o/r/actions/runs/1/jobs"), "Actions: Read-only");
+});
+
+test("permissionHint turns a status code into something actionable", () => {
+  const notFound = permissionHint(new ApiError("Not found (404)", 404, "/repos/o/r/environments"));
+  // A 404 is really an access problem, and saying so is the whole point.
+  assert.match(notFound, /cannot see the repository/);
+  assert.match(notFound, /Environments: Read-only/);
+  assert.match(notFound, /"repo" scope/);
+
+  const forbidden = permissionHint(new ApiError("Forbidden", 403, "/repos/o/r/actions/runs"));
+  assert.match(forbidden, /Actions: Read-only/);
+
+  assert.match(permissionHint(new ApiError("Token rejected", 401, "/user")), /rejected/);
+  // Not every failure is about permissions.
+  assert.equal(permissionHint(new ApiError("HTTP 500", 500, "/x")), null);
+  assert.equal(permissionHint(new Error("network down")), null);
 });
 
 test("environmentUrl points at the environment's own page", () => {

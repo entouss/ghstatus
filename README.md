@@ -14,7 +14,9 @@ history:
 ```
 ▾ 🟥 my-org/api                                    3 envs · 12m ago
     › 🟩 production  v2.3.1                         2h ago · @alice
+         Deploy
     ▾ 🟥 staging     ghcr.io/…:2.4.0-rc1           12m ago · @bob
+         Release and deploy to environment
           Status        🟥 Failure          Updated  12m ago
           Triggered by  @bob                Commit   abc1234
           Took          4m 12s              Version  2.4.0-rc1
@@ -123,6 +125,11 @@ fallback; with no token, only the session is used.
 - Results are cached (default 120s) so reopening the popup is instant.
   **Refresh** re-fetches everything and drops the history cache too.
 - Repos are fetched 4 at a time, environments within a repo likewise.
+- Every environment shows the **workflow** that produced its current
+  deployment without being expanded. That costs one request per repo, not per
+  environment: the repo's recent runs are fetched once and matched to each
+  environment's deployment by commit, preferring a run that names the
+  environment.
 - Failures are reported per repo, so one bad repo doesn't blank the dashboard.
 
 ### Getting to the Actions jobs
@@ -171,6 +178,16 @@ Almost everything on screen is a link back to where it came from:
 
 Where a link can't be derived with confidence the value is shown as plain
 text rather than pointed somewhere that might 404.
+
+### When a repo fails to load
+
+The error is shown on the repo, and hovering it explains what to change. GitHub
+answers "no access" with a 404 rather than admitting a private repo exists, so
+the raw status is misleading on its own; the tooltip names the classic scope
+(`repo`) and the fine-grained permission the failing call actually needed —
+*Deployments*, *Environments* or *Actions*, read-only — and mentions SSO
+authorisation, which is the usual cause of a 403 on an org repo. The same hint
+appears beside **Settings → Test**.
 
 ### Reading the columns
 

@@ -5,6 +5,7 @@ import { parseRepo, webBase } from "./config.js";
 import * as actions from "./github-actions.js";
 import * as api from "./github-api.js";
 import * as html from "./github-html.js";
+import { permissionHint } from "./rest.js";
 import { mostSevere } from "./state.js";
 import { mapLimit } from "./util.js";
 
@@ -72,7 +73,8 @@ async function loadRepo(config, owner, repo, { signal }) {
     try {
       const environments = await client(source).fetchRepoEnvironments(config, owner, repo, { signal });
       environments.sort((a, b) => a.name.localeCompare(b.name));
-      return { ...base, source, environments, ...rollUp(environments), error: null };
+      await attachWorkflowNames(config, owner, repo, environments, { signal });
+      return { ...base, source, environments, ...rollUp(environments), error: null, errorHint: null };
     } catch (err) {
       if (err?.name === "AbortError") throw err;
       lastError = err;
@@ -86,7 +88,39 @@ async function loadRepo(config, owner, repo, { signal }) {
     bucket: "idle",
     updatedAt: null,
     error: describe(lastError, order),
+    errorHint: permissionHint(lastError),
   };
+}
+
+/**
+ * Name the workflow behind each environment's current deployment, so the
+ * dashboard shows it without expanding. One request for the repo's recent
+ * runs covers every environment; best effort, since it is decoration.
+ */
+async function attachWorkflowNames(config, owner, repo, environments, { signal }) {
+  if (!config.token) return;
+
+  const needing = environments.filter((env) => env.latest?.sha && !env.latest.workflowName);
+  if (!needing.length) return;
+
+  let runs;
+  try {
+    runs = await actions.fetchRecentRuns(config, owner, repo, { signal });
+  } catch (err) {
+    if (err?.name === "AbortError") throw err;
+    return;
+  }
+
+  const base = `${webBase(config)}/${owner}/${repo}`;
+  for (const env of needing) {
+    const run = actions.pickRunForDeployment(runs, env.latest);
+    if (!run) continue;
+    env.latest.workflowName = run.workflowName;
+    if (!env.latest.runId) {
+      env.latest.runId = run.id;
+      env.latest.runUrl = `${base}/actions/runs/${run.id}`;
+    }
+  }
 }
 
 /**

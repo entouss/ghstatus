@@ -125,6 +125,43 @@ export function pickDeployJob(jobs, deployment = {}) {
 }
 
 /**
+ * The repo's recent runs, in one request. Naming the workflow behind every
+ * environment's current deployment costs one call per repo this way, rather
+ * than one per environment.
+ */
+export async function fetchRecentRuns(config, owner, repo, { signal } = {}) {
+  const data = await api(config, `/repos/${owner}/${repo}/actions/runs?per_page=100`, { signal });
+  return (data.workflow_runs || []).map((run) => ({
+    id: String(run.id),
+    workflowName: run.name || null,
+    headSha: run.head_sha || null,
+    displayTitle: run.display_title || null,
+  }));
+}
+
+/**
+ * Which of those runs deployed this. Same rule as the per-commit search: a run
+ * naming the environment beats one that merely shares the commit.
+ */
+export function pickRunForDeployment(runs, deployment) {
+  if (!deployment?.sha) return null;
+
+  const candidates = runs.filter((run) => run.headSha === deployment.sha);
+  if (!candidates.length) return null;
+
+  const environment = deployment.environment;
+  if (environment) {
+    const named = candidates.find((run) =>
+      `${run.workflowName || ""} ${run.displayTitle || ""}`
+        .toLowerCase()
+        .includes(environment.toLowerCase())
+    );
+    if (named) return named;
+  }
+  return candidates[0];
+}
+
+/**
  * Last resort: find the run by the commit that was deployed. Several runs can
  * share a commit, so prefer one that actually targeted this environment.
  */
