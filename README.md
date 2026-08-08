@@ -43,15 +43,19 @@ history:
 | | State |
 |---|---|
 | 🟩 | `success`, `active` |
-| 🟦 | `in_progress`, `queued`, `pending`, `waiting` (approval) |
+| 🟦 | `in_progress`, `queued`, `pending` |
+| 🟨 | `waiting` for approval, `action_required` |
 | 🟥 | `failure`, `error` |
 | ⬜ | `inactive`, `destroyed`, no deployments, unknown |
 
 Each dot is a **rollup of the level beneath it**: a group is as bad as its
-worst repo, and a repo as bad as its worst environment. So a broken production
-shows red all the way up, even while another environment is mid-deploy.
-Note this is the opposite of how a single card is read — there, a run happening
-*now* supersedes the outcome printed beside it. Both orderings live in
+worst repo, and a repo as bad as its worst environment. Broken outranks
+blocked-on-a-human, which outranks a deploy that is simply running and will
+resolve itself. So a broken production shows red all the way up, even while
+another environment is mid-deploy.
+
+Reading a single card runs the other way: there, a run happening *now*
+supersedes the outcome printed beside it. Both orderings live in
 [`src/lib/state.js`](src/lib/state.js) (`SEVERITY` and `CARD_PRIORITY`).
 
 A deployment that GitHub has created but not yet reported a status for is shown

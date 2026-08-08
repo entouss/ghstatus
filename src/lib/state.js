@@ -1,12 +1,13 @@
 // Normalisation of the many ways GitHub spells a deployment state, and the
 // mapping down to the four buckets the dashboard renders.
 
-/** @typedef {"ok"|"bad"|"busy"|"idle"} Bucket */
+/** @typedef {"ok"|"bad"|"busy"|"waiting"|"idle"} Bucket */
 
 export const EMOJI = {
   ok: "\u{1F7E9}", // green
   bad: "\u{1F7E5}", // red
   busy: "\u{1F7E6}", // blue
+  waiting: "\u{1F7E8}", // yellow
   idle: "\u{2B1C}", // white
 };
 
@@ -14,6 +15,7 @@ export const BUCKET_LABEL = {
   ok: "Success",
   bad: "Failed",
   busy: "In progress",
+  waiting: "Waiting",
   idle: "Idle",
 };
 
@@ -26,7 +28,7 @@ const STATE_BUCKET = {
   in_progress: "busy",
   pending: "busy",
   queued: "busy",
-  waiting: "busy",
+  waiting: "waiting",
   inactive: "idle",
   destroyed: "idle",
   unknown: "idle",
@@ -57,12 +59,14 @@ const PHRASE_STATE = [
 // Two different orderings, for two different questions.
 //
 // CARD_PRIORITY answers "one card mentions several states, which is current?"
-// — a run happening now supersedes the outcome printed beside it.
-const CARD_PRIORITY = { busy: 3, bad: 2, ok: 1, idle: 0 };
+// — a run happening now, or one blocked on approval, supersedes the outcome
+// printed beside it.
+const CARD_PRIORITY = { busy: 4, waiting: 3, bad: 2, ok: 1, idle: 0 };
 
-// SEVERITY answers "several environments, how bad is this repo?" — here a
-// broken production outranks a deploy that happens to be running elsewhere.
-export const SEVERITY = { bad: 3, busy: 2, ok: 1, idle: 0 };
+// SEVERITY answers "several environments, how bad is this repo?" — a broken
+// production outranks everything, then something blocked on a human, then a
+// deploy that is simply running and will resolve itself.
+export const SEVERITY = { bad: 4, waiting: 3, busy: 2, ok: 1, idle: 0 };
 
 /**
  * @param {string|null|undefined} state

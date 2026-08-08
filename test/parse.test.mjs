@@ -41,7 +41,7 @@ test("bucketOf maps every REST deployment state", () => {
   assert.equal(bucketOf("in_progress"), "busy");
   assert.equal(bucketOf("queued"), "busy");
   assert.equal(bucketOf("pending"), "busy");
-  assert.equal(bucketOf("waiting"), "busy");
+  assert.equal(bucketOf("waiting"), "waiting");
   assert.equal(bucketOf("inactive"), "idle");
   assert.equal(bucketOf(null), "idle");
   assert.equal(bucketOf("something-new"), "idle");
@@ -57,6 +57,9 @@ test("mostSevere rolls a repo up to its worst environment", () => {
   // A broken environment outranks one that merely happens to be deploying.
   assert.equal(mostSevere(["ok", "busy", "bad"]), "bad");
   assert.equal(mostSevere(["ok", "busy"]), "busy");
+  // Something blocked on a human outranks one that will resolve itself.
+  assert.equal(mostSevere(["ok", "busy", "waiting"]), "waiting");
+  assert.equal(mostSevere(["waiting", "bad"]), "bad");
   assert.equal(mostSevere(["ok", "idle"]), "ok");
   assert.equal(mostSevere(["idle", "idle"]), "idle");
   assert.equal(mostSevere([]), "idle");
@@ -69,6 +72,8 @@ test("stateFromText picks the most urgent state on one card", () => {
   assert.equal(stateFromText("staging Failure 10 minutes ago"), "failure");
   assert.equal(stateFromText("production Active In progress · deploy #42"), "in_progress");
   assert.equal(stateFromText("prod Waiting for approval · last deployed 3 days ago"), "waiting");
+  // A run happening now still supersedes one merely blocked on approval.
+  assert.equal(stateFromText("prod Waiting for approval · In progress"), "in_progress");
   assert.equal(stateFromText("qa Deployed yesterday Failed 1 hour ago"), "failure");
   assert.equal(stateFromText("nothing recognisable here"), null);
 });
@@ -346,13 +351,16 @@ test("a deployment whose status points elsewhere has no run", () => {
 test("jobBucket treats an unfinished job as running", () => {
   assert.equal(jobBucket({ status: "in_progress", conclusion: null }), "busy");
   assert.equal(jobBucket({ status: "queued", conclusion: null }), "busy");
+  // A job held for approval is not running; only its status says so, since a
+  // job that has not finished has no conclusion to read.
+  assert.equal(jobBucket({ status: "waiting", conclusion: null }), "waiting");
   assert.equal(jobBucket({ status: "completed", conclusion: "success" }), "ok");
   assert.equal(jobBucket({ status: "completed", conclusion: "failure" }), "bad");
   assert.equal(jobBucket({ status: "completed", conclusion: "timed_out" }), "bad");
   assert.equal(jobBucket({ status: "completed", conclusion: "cancelled" }), "idle");
   assert.equal(jobBucket({ status: "completed", conclusion: "skipped" }), "idle");
-  // action_required means a human has to step in, so it reads as in flight.
-  assert.equal(jobBucket({ status: "completed", conclusion: "action_required" }), "busy");
+  // action_required means a human has to step in — that is waiting, not running.
+  assert.equal(jobBucket({ status: "completed", conclusion: "action_required" }), "waiting");
   assert.equal(jobBucket({ status: "completed", conclusion: "something_new" }), "idle");
 });
 

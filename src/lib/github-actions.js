@@ -13,7 +13,7 @@ const CONCLUSION_BUCKET = {
   failure: "bad",
   timed_out: "bad",
   startup_failure: "bad",
-  action_required: "busy",
+  action_required: "waiting",
   cancelled: "idle",
   skipped: "idle",
   neutral: "idle",
@@ -32,9 +32,10 @@ const CONCLUSION_BUCKET = {
  * @property {string|null} url
  */
 
-/** A job with no conclusion yet is still running, whatever its status says. */
+/** A job with no conclusion yet is still running — unless it is blocked on an
+ *  approval, which its status says and its conclusion cannot. */
 export function jobBucket(job) {
-  if (!job.conclusion) return "busy";
+  if (!job.conclusion) return job.status === "waiting" ? "waiting" : "busy";
   return CONCLUSION_BUCKET[job.conclusion] || "idle";
 }
 
