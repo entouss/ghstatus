@@ -316,7 +316,11 @@ function versionFromRef(ref) {
   return /^v?\d+[\w.+-]*$/.test(ref) ? ref : null;
 }
 
-/** One-line summary of what shipped, for the left of a collapsed row. */
+/**
+ * What shipped, for the chip beside an environment name. Not the commit: that
+ * has a column of its own, and as a chip it was glued to the environment name
+ * at whatever width it happened to be.
+ */
 export function deploymentSubtitle(deployment) {
-  return deployment.version || deployment.image || shortSha(deployment.sha) || null;
+  return deployment.version || deployment.image || null;
 }

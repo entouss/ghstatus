@@ -16,9 +16,9 @@ history:
 
 ```
 ▾ 🟥 my-org/api                                    3 envs · 12m ago
-    › 🟩 production  v2.3.1                         2h ago · @alice
+    › 🟩 production  v2.3.1              2h ago · @alice   9f2e10c
          Deploy
-    ▾ 🟥 staging     ghcr.io/…:2.4.0-rc1           12m ago · @bob
+    ▾ 🟥 staging     ghcr.io/…:2.4.0-rc1  12m ago · @bob    abc1234
          Release and deploy to environment
           Status        🟥 Failure          Updated  12m ago
           Triggered by  @bob                Commit   abc1234
@@ -231,6 +231,11 @@ Each past deployment's job duration carries a **bar comparing it against the
 slowest of the ten fetched**, so a run that took three times as long as usual
 is visible without reading the numbers. The bar's tooltip gives the percentage
 and what it is being compared with.
+
+The chip beside an environment name is the **version** or **image**, never the
+commit — the commit has a column of its own, on the right, so it lines up down
+the environments instead of trailing each name at whatever width it happens to
+be.
 
 **Version** and **Image** come from the deployment payload, which is free-form.
 The whole payload is searched, shallowest key first, for the conventional

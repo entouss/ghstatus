@@ -197,7 +197,8 @@ test("version only comes from a ref that looks like a release tag", () => {
 test("deploymentSubtitle prefers the most specific identifier", () => {
   assert.equal(deploymentSubtitle({ version: "1.2", image: "a:1", sha: "abcdef1234" }), "1.2");
   assert.equal(deploymentSubtitle({ version: null, image: "a:1", sha: "abcdef1234" }), "a:1");
-  assert.equal(deploymentSubtitle({ version: null, image: null, sha: "abcdef1234" }), "abcdef1");
+  // Not the sha — that has a column of its own now.
+  assert.equal(deploymentSubtitle({ version: null, image: null, sha: "abcdef1234" }), null);
   assert.equal(deploymentSubtitle({}), null);
 });
 

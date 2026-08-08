@@ -245,7 +245,12 @@ function renderEnv(result, env) {
     openLink(
       environmentUrl(config, result.owner, result.repo, env.name),
       "Open this environment's latest deployment"
-    )
+    ),
+    // Same right-hand column as the history table below, so commits line up
+    // down the environments instead of trailing their names.
+    latest?.sha
+      ? link(latest.shaUrl, shortSha(latest.sha), "sha mono", concept(COMMIT, [latest.sha]))
+      : el("span", { class: "sha mono" })
   );
   summary.append(line);
 
